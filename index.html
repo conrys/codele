@@ -87,6 +87,15 @@ dialog th,dialog td{padding:6px 4px;border-top:1px dashed var(--grid);text-align
 dialog th{font-size:13px;color:var(--mut);border-top:0}
 dialog td:first-child{text-align:left}
 input[type=checkbox]{width:20px;height:20px}
+/* Урок і панель вчителя */
+.lesson{border:2px dashed var(--ink);border-radius:6px;padding:8px 12px;margin-bottom:12px;background:var(--paper)}
+.lesson summary{cursor:pointer;font-weight:700}
+pre{background:var(--paper);padding:8px;border-radius:4px;overflow-x:auto;font-size:13px;white-space:pre-wrap}
+#tBody table{width:100%;border-collapse:collapse;font-size:14px}
+#tBody th,#tBody td{padding:6px 4px;border-top:1px dashed var(--grid);text-align:left}
+#tBody th{font-size:12px;color:var(--mut);border-top:0}
+dialog button{margin:4px 6px 4px 0}
+details{margin:6px 0}
 </style>
 </head>
 <body>
@@ -99,6 +108,7 @@ input[type=checkbox]{width:20px;height:20px}
       <button id="menuBtn" class="ghost" aria-expanded="false" aria-controls="menuList">Меню</button>
       <ul id="menuList" hidden>
         <li><button id="miProfile">Профіль</button></li>
+        <li><button id="miTeacher" hidden>Панель вчителя</button></li>
         <li><button id="miRules">Правила</button></li>
         <li><button id="miLogout">Вийти</button></li>
       </ul>
@@ -112,6 +122,7 @@ input[type=checkbox]{width:20px;height:20px}
       <li>Чим коротший код, тим краще. Ми рахуємо токени — це маленькі частини коду: слова, числа й знаки. Пробіли, відступи, порожні рядки та коментарі не рахуються.</li>
       <li>Вище в рейтингу той, у кого менше токенів. Якщо їх порівну — той, чий код виконується за менше кроків. Якщо й кроків порівну — ви ділите місце.</li>
       <li>Вставляти код можна. Але у щоденній задачі вставлений код отримає значок «вставлено», а вчитель побачить, що саме вставили.</li>
+      <li>У щоденній задачі є 5 спроб на день. Помилка в написанні коду (наприклад, забута дужка) спробою не вважається. У практиці спроб можна скільки завгодно.</li>
       <li>Марафон — серія задач від легкої до складної. Секундомір іде, поки ти проходиш усі. Вище той, хто швидший, а якщо час однаковий — у кого менше токенів.</li>
       <li>Практика — без рейтингу. Вставляй і пробуй, скільки хочеш. Кількість спроб бачиш тільки ти. Вчитель бачить лише те, що ти тренувався.</li>
       <li>Рейтинг починається заново першого числа кожного місяця (за київським часом). Найкращі отримують кубки: золотий, срібний і бронзовий.</li>
@@ -132,6 +143,7 @@ input[type=checkbox]{width:20px;height:20px}
   </section>
   <dialog id="profDlg"></dialog>
   <dialog id="meDlg"></dialog>
+  <dialog id="tDlg"></dialog>
 
   <div id="appBody" hidden>
   <!-- Вкладки режимів: щоденна задача, практика, марафон. Список поруч з'являється в практиці (обрати задачу) і в марафоні (обрати рівень). -->
@@ -146,6 +158,11 @@ input[type=checkbox]{width:20px;height:20px}
 
   <!-- Картка з умовою задачі. -->
   <section class="card">
+    <!-- Урок: тема і пояснення з прикладом. Показується, якщо для задачі є урок. -->
+    <details id="lesson" class="lesson" open hidden>
+      <summary id="lessonTitle"></summary>
+      <div id="lessonBody"></div>
+    </details>
     <h2 id="title"></h2>
     <p id="text"></p>
     <p>Напиши функцію: <code class="sig" id="sig"></code></p>
@@ -158,6 +175,7 @@ input[type=checkbox]{width:20px;height:20px}
     <button id="rushStart" hidden>Старт</button>
     <button id="share" class="ghost" hidden>Скопіювати результат</button>
     <span class="badge" id="pasteBadge" hidden>📋 вставлено</span>
+    <span class="mut" id="attLeft" hidden></span>
     <span id="status">Завантажую Python…</span>
   </div>
   <div class="bar"><button id="export" class="ghost" hidden>Журнал вставок (.md)</button></div>
@@ -181,6 +199,11 @@ input[type=checkbox]{width:20px;height:20px}
 
   <p><small>Довжину рахуємо в токенах: пробіли, відступи, порожні рядки та коментарі не враховуються. Кроки — це кількість виконаних рядків твого коду на великому тесті. Чим менше, тим краще.</small></p>
   </div>
+  <!-- Панель вчителя: класи, учні, результати, вставки. Доступна лише вчителю. -->
+  <section id="tPanel" hidden>
+    <div class="top"><h2>Панель вчителя</h2><button id="tBack" class="ghost">← Назад</button></div>
+    <div id="tBody"></div>
+  </section>
 </main>
 
 <script>
@@ -235,6 +258,28 @@ const RUSH=[
 ];
 
 // Python-код перевірки. Його виконує Pyodide у браузері. Нижче кожна частина пояснена окремо.
+// ---------- Уроки ----------
+// Над кожною задачею показується короткий урок: тема, пояснення і приклад.
+// Ключ — назва функції задачі (fn). Щоб додати урок, скопіюй один блок і зміни текст.
+// text — абзаци пояснення, example — приклад коду (не розв'язок задачі).
+const LESSONS={
+ count_vowels:{topic:"цикл for і рядки",
+  text:["Рядок — це послідовність символів. Цикл for бере їх по одному.","Умова if перевіряє символ. Наприклад, \"a\" in \"aeiou\" дає True, бо літера є в рядку.","Щоб не залежати від великих літер, скористайся методом .lower()."],
+  example:"def count_a(s):\n    n = 0\n    for c in s:\n        if c == \"a\":\n            n += 1\n    return n"},
+ digit_sum:{topic:"цикл while та остача від ділення",
+  text:["n % 10 дає останню цифру числа, а n // 10 — число без останньої цифри.","Цикл while повторюється, поки умова правдива. Так можна «відкушувати» цифри по одній."],
+  example:"n = 493\nlast = n % 10   # 3\nrest = n // 10  # 49\nprint(last, rest)"},
+ is_palindrome:{topic:"зрізи рядків",
+  text:["Зріз s[::-1] дає рядок навпаки, а .lower() робить усі літери малими.","Порівняти два рядки можна через ==."],
+  example:"s = \"Python\"\nprint(s[::-1])   # nohtyP\nprint(s.lower()) # python"},
+ second_max:{topic:"списки та множини",
+  text:["set(список) прибирає повтори, sorted(...) впорядковує за зростанням.","Останній елемент списку — [-1], а передостанній — [-2]."],
+  example:"a = [3, 1, 3, 2]\nu = sorted(set(a))   # [1, 2, 3]\nprint(u[-1])         # 3, найбільше"},
+ count_primes:{topic:"вкладені цикли",
+  text:["Просте число ділиться без остачі лише на 1 і на себе.","Щоб перевірити одне число, пройди циклом по можливих дільників. Щоб порахувати прості до n, постав цей цикл усередину іншого."],
+  example:"n = 7\nok = True\nfor d in range(2, n):\n    if n % d == 0:\n        ok = False\nprint(ok)   # True: 7 просте"}
+};
+
 const PY=`
 import sys, io, json, tokenize
 # Ці типи токенів не рахуємо: переноси рядків, відступи, коментарі та кінець файлу.
@@ -263,10 +308,17 @@ def check(src, fname, tests, big):
         return tr
     # Порядок роботи: рахуємо токени, запускаємо код, прогоняємо тести, рахуємо кроки на великому тесті.
     try:
+        # Спершу перевіряємо, чи код правильно написаний (дужки, двокрапки, відступи)
+        try:
+            code=compile(src,'<user>','exec')
+        except SyntaxError as e:
+            out['syntax']=True
+            out['error']='Синтаксична помилка у рядку '+str(e.lineno)+' ('+str(e.msg)+'). Перевір дужки, двокрапки та відступи. Ця спроба не рахується.'
+            return json.dumps(out)
         out['tokens']=count_tokens(src)
         sys.settrace(tr)
         g={}
-        exec(compile(src,'<user>','exec'),g)
+        exec(code,g)
         if fname not in g: raise NameError('Не знайдено функцію '+fname)
         f=g[fname]
         # Кожен тест: викликаємо функцію учня й порівнюємо відповідь з очікуваною.
@@ -409,6 +461,7 @@ function render(){
   $("text").textContent=task.text;
   $("sig").textContent="def "+task.fn+"("+task.params+"):";
   $("sig").parentElement.hidden=!task.fn;
+  renderLesson();
   const starter="def "+task.fn+"("+task.params+"):\n    ";
   $("code").value=idle?"":(r||drafts[curKey()]===undefined?starter:drafts[curKey()]);
   $("code").disabled=idle;
@@ -433,6 +486,7 @@ function render(){
   if(typeof showPaste==="function")showPaste();
   if(py&&!idle)updateLive();
   refreshBoard();
+  loadAttempts();
 }
 
 // Перемикання режиму: зберігаємо чернетку, зупиняємо марафон, обираємо задачу й перемальовуємо сторінку.
@@ -479,10 +533,22 @@ $("code").addEventListener("keydown",e=>{
   }
 });
 // Вставки: якщо вставлено PASTE_MIN символів або більше, записуємо це в журнал і показуємо значок.
-const PASTE_MIN=15, pkey="pyday-paste:"+day;
+const PASTE_MIN=15;
+let pkey="pyday-paste:"+day;     // після входу ключ стає особистим (з id учня)
 let pastes=[];
 try{pastes=JSON.parse(localStorage.getItem(pkey))||[]}catch(e){}
-function showPaste(){const on=mode!=="practice"&&pastes.some(p=>(p.mode||"daily")===mode);$("pasteBadge").hidden=!on;$("export").hidden=!on}
+// Позначка «вставлено» лишається, лише поки вставлений текст ще є в коді.
+// Якщо учень його стер і написав сам, значок зникає (журнал для вчителя лишається).
+function stillPasted(){
+  if(mode==="rush")return !!rush.pasted;
+  if(mode!=="daily")return false;
+  const code=$("code").value;
+  return pastes.some(p=>(p.mode||"daily")==="daily"&&p.text.trim().length>0&&code.includes(p.text.trim()));
+}
+function showPaste(){
+  $("pasteBadge").hidden=!stillPasted();
+  $("export").hidden=mode==="practice"||!pastes.some(p=>(p.mode||"daily")===mode);
+}
 showPaste();
 // Повідомлення на 5 секунд.
 let toastTimer;
@@ -513,6 +579,7 @@ $("export").addEventListener("click",()=>{
 // Лічильник токенів під час набору: рахуємо через 0,25 с після останньої клавіші, щоб не вантажити телефон.
 let timer;
 $("code").addEventListener("input",()=>{
+  showPaste();
   if(!py)return;
   clearTimeout(timer);
   timer=setTimeout(updateLive,250);
@@ -640,6 +707,18 @@ $("run").addEventListener("click",async()=>{
   await new Promise(r=>setTimeout(r,30));
   // Надсилаємо код робітнику, чекаємо на відповідь і розбираємо її (JSON).
   const res=JSON.parse(await py.check($("code").value,task.fn,task.tests,task.big));
+  // Щоденна задача: кожну спробу (крім помилок в написанні коду) списує сервер
+  if(mode==="daily"&&me&&!res.syntax){
+    const u=await sb.rpc("use_attempt",{p_key:KD});
+    if(u.error){
+      if(/no attempts/.test(u.error.message))attemptsLeft=0;
+      $("status").textContent=attemptsLeft===0?"Спроби на сьогодні закінчилися.":"Не вдалося зв’язатися з базою. Спробуй ще раз.";
+      updateAttemptsUI();
+      return;
+    }
+    attemptsLeft=u.data;
+    updateAttemptsUI();
+  }
   if(mode==="practice"){pRecord();updateAttempts()}
   const box=$("results");
   box.hidden=false;
@@ -670,7 +749,7 @@ $("run").addEventListener("click",async()=>{
     $("share").hidden=true;
     $("status").textContent="Не всі тести пройдено";
   }
-  $("run").disabled=false;
+  updateAttemptsUI();
   // У марафоні після успішної задачі переходимо до наступної.
   if(mode==="rush"&&rush.running&&!res.error&&res.rows.every(r=>r[0]))rushPassed(res);
 });
@@ -722,6 +801,7 @@ function authMsg(t){const m=$("aMsg");m.textContent=t||"";m.hidden=!t}
 // Показує форму входу або реєстрації, а сам застосунок ховає
 function showAuth(){
   $("appBody").hidden=true;
+  $("tPanel").hidden=true;
   $("auth").hidden=false;
   const reg=authMode!=="login", fin=authMode==="finish";
   $("authTitle").textContent=fin?"Заверши реєстрацію":reg?"Реєстрація":"Вхід";
@@ -737,6 +817,12 @@ function showApp(){
   $("auth").hidden=true;
   $("appBody").hidden=false;
   menuBtn.textContent=me.nick;
+  $("miTeacher").hidden=me.role!=="teacher";
+  $("tPanel").hidden=true;
+  // Журнал вставок і спроби належать конкретному учню, а не браузеру
+  pkey="pyday-paste:"+me.id+":"+day;
+  try{pastes=JSON.parse(localStorage.getItem(pkey))||[]}catch(e){pastes=[]}
+  attemptsLeft=null;
   render();
 }
 
@@ -801,6 +887,8 @@ $("aGo").addEventListener("click",async()=>{
 async function logout(){
   await sb.auth.signOut();
   me=null;
+  pastes=[];
+  attemptsLeft=null;
   authMode="login";
   $("aPass").value="";
   showAuth();
@@ -819,7 +907,7 @@ function marathonKey(){return KD.slice(0,7)+":"+rush.tier}   // «місяць:�
 
 async function submitDaily(res){
   if(!me)return;
-  const pasted=pastes.some(p=>(p.mode||"daily")==="daily");
+  const pasted=stillPasted();
   const r=await sb.rpc("submit_result",{p_kind:"daily",p_key:KD,p_tokens:res.tokens,p_steps:res.steps,p_ms:null,p_pasted:pasted});
   if(r.error)toast("Результат не збережено: "+r.error.message);
   refreshBoard();
@@ -1018,6 +1106,188 @@ async function openMyProfile(){
   dlg.append(close);
 }
 $("miProfile").addEventListener("click",()=>{toggleMenu(false);openMyProfile()});
+
+// ---------- Урок над задачею ----------
+// Заповнює блок «Урок» для поточної задачі (якщо для неї є урок у LESSONS).
+function renderLesson(){
+  const L=LESSONS[task.fn];
+  $("lesson").hidden=!L;
+  if(!L)return;
+  $("lessonTitle").textContent="Урок · "+L.topic;
+  const box=$("lessonBody");
+  box.textContent="";
+  L.text.forEach(t=>box.append(el("p",t)));
+  box.append(el("pre",L.example,"mono"));
+}
+
+// ---------- Спроби на день (щоденна задача) ----------
+let attemptsLeft=null;      // скільки спроб залишилось; null — ще не знаємо
+const ATTEMPTS_MAX=5;
+
+// Показує лічильник спроб і блокує «Запустити», коли спроби закінчились
+function updateAttemptsUI(){
+  const on=mode==="daily"&&!!me&&attemptsLeft!==null;
+  $("attLeft").hidden=!on;
+  if(on){
+    $("attLeft").textContent=attemptsLeft===0
+      ?"Спроби на сьогодні закінчилися. Потренуйся в практиці!"
+      :"Спроб сьогодні: "+attemptsLeft+" з "+ATTEMPTS_MAX;
+  }
+  const idle=mode==="rush"&&!rush.running;
+  $("run").disabled=!py||idle||(mode==="daily"&&attemptsLeft===0);
+}
+async function loadAttempts(){
+  if(mode==="daily"&&me&&sb&&attemptsLeft===null){
+    const r=await sb.rpc("attempts_left",{p_key:KD});
+    if(!r.error)attemptsLeft=r.data;
+  }
+  updateAttemptsUI();
+}
+
+// ---------- Панель вчителя ----------
+const T={classId:null,note:""};       // T.classId — який клас відкрито, T.note — коротке повідомлення
+
+function btn(text,fn,cls){const b=el("button",text,cls);b.addEventListener("click",fn);return b}
+// Завантаження тексту як файлу
+function download(name,text,type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:type}));
+  a.download=name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+const csvCell=v=>'"'+String(v===null||v===undefined?"":v).replace(/"/g,'""')+'"';
+
+function showTeacher(){$("appBody").hidden=true;$("tPanel").hidden=false;loadTeacher()}
+function hideTeacher(){$("tPanel").hidden=true;$("appBody").hidden=false}
+
+// Завантажує з бази все потрібне вчителю і малює панель
+async function loadTeacher(){
+  const box=$("tBody");
+  box.textContent="Завантажую…";
+  // Правила доступу в базі самі відфільтрують: прийдуть лише дані твоїх класів
+  const q=await Promise.all([
+    sb.from("classes").select("id,name,join_code").order("created_at"),
+    sb.from("profiles").select("id,nick,display_name,class_id").eq("role","student").order("nick"),
+    sb.from("submissions").select("user_id,tokens,steps,pasted").eq("kind","daily").eq("task_key",KD),
+    sb.from("practice_days").select("user_id").eq("day",KD),
+    sb.from("attempts").select("user_id,used").eq("task_key",KD),
+    sb.from("paste_log").select("user_id,kind,task_key,length,body,created_at").order("created_at",{ascending:false}).limit(100)
+  ]);
+  const bad=q.find(x=>x.error);
+  if(bad){box.textContent="Не вдалося завантажити дані: "+bad.error.message;return}
+  const classes=q[0].data, studs=q[1].data;
+  const res={}, used={}, plog={}, prac=new Set(q[3].data.map(x=>x.user_id));
+  q[2].data.forEach(x=>{res[x.user_id]=x});
+  q[4].data.forEach(x=>{used[x.user_id]=x.used});
+  q[5].data.forEach(x=>{(plog[x.user_id]=plog[x.user_id]||[]).push(x)});
+  if(!classes.some(c=>c.id===T.classId))T.classId=classes.length?classes[0].id:null;
+  box.textContent="";
+
+  // --- Класи ---
+  const c1=el("div",undefined,"card");
+  c1.append(el("h2","Класи"));
+  if(T.note){c1.append(el("p",T.note));T.note=""}
+  const row=el("div",undefined,"bar");
+  classes.forEach(c=>row.append(btn(c.name,()=>{T.classId=c.id;loadTeacher()},c.id===T.classId?"":"ghost")));
+  c1.append(row);
+  const cur=classes.find(c=>c.id===T.classId);
+  if(cur)c1.append(el("p","Код для реєстрації учнів: "+cur.join_code,"mut"));
+  const nameIn=el("input");
+  nameIn.type="text";nameIn.maxLength=40;nameIn.placeholder="Назва нового класу, наприклад 8-А";
+  c1.append(nameIn,btn("Створити клас",async()=>{
+    const r=await sb.rpc("create_class",{p_name:nameIn.value});
+    T.note=r.error?"Не вдалося створити клас.":"Клас створено. Код для учнів: "+r.data;
+    loadTeacher();
+  }));
+  box.append(c1);
+  if(!cur)return;
+
+  // --- Учні класу ---
+  const list=studs.filter(s=>s.class_id===T.classId);
+  const c2=el("div",undefined,"card");
+  c2.append(el("h2","Учні · "+KD));
+  const tbl=el("table");
+  tbl.innerHTML="<tr><th>Учень</th><th>Результат</th><th>Спроби</th><th>Практика</th><th></th></tr>";
+  list.forEach(s=>{
+    const tr=el("tr"), r=res[s.id], td=el("td");
+    tr.append(el("td",s.nick+" ("+s.display_name+")"));
+    tr.append(el("td",r?r.tokens+" ток. · "+r.steps+" кр."+(r.pasted?" 📋":""):"–"));
+    tr.append(el("td",(used[s.id]||0)+" з "+ATTEMPTS_MAX));
+    tr.append(el("td",prac.has(s.id)?"✓":"–"));
+    td.append(btn("Керувати",()=>manageStudent(s),"ghost"));
+    tr.append(td);
+    tbl.append(tr);
+  });
+  c2.append(list.length?tbl:el("p","У класі ще немає учнів.","mut"));
+  // Експорт результатів у CSV (BOM на початку, щоб Excel правильно показав кирилицю)
+  const ex=el("div",undefined,"bar");
+  ex.append(btn("Результати (.csv)",()=>{
+    const rows=[["Нік","Ім’я","Токени","Кроки","Вставлено","Спроби","Практика"]];
+    list.forEach(s=>{const r=res[s.id]||{};rows.push([s.nick,s.display_name,r.tokens,r.steps,r.pasted?"так":"",used[s.id]||0,prac.has(s.id)?"так":"ні"])});
+    download("codele-"+KD+".csv","\ufeff"+rows.map(r=>r.map(csvCell).join(",")).join("\n"),"text/csv");
+  },"ghost"));
+  c2.append(ex);
+  box.append(c2);
+
+  // --- Вставки ---
+  const c3=el("div",undefined,"card");
+  c3.append(el("h2","Вставки (останні)"));
+  let md="# Журнал вставок · "+cur.name+"\n\n", any=false;
+  list.forEach(s=>(plog[s.id]||[]).forEach(p=>{
+    any=true;
+    const when=new Date(p.created_at).toLocaleString("uk-UA");
+    const d=el("details");
+    d.append(el("summary",s.nick+" · "+p.kind+" · "+p.length+" символів · "+when));
+    d.append(el("pre",p.body));           // текст учня виводимо лише як текст, він не виконується
+    c3.append(d);
+    md+="## "+s.nick+" · "+p.kind+" · "+when+"\n\n```python\n"+p.body+"\n```\n\n";
+  }));
+  if(!any)c3.append(el("p","Вставок немає.","mut"));
+  else c3.append(btn("Архів вставок (.md)",()=>download("codele-pastes-"+KD+".md",md,"text/markdown"),"ghost"));
+  box.append(c3);
+}
+
+// Вікно керування одним учнем: ім'я, пароль, видалення
+function manageStudent(s){
+  const dlg=$("tDlg");
+  dlg.textContent="";
+  const msg=el("p","","mut");
+  dlg.append(el("h2",s.nick));
+
+  const n=el("input");
+  n.type="text";n.value=s.display_name;n.maxLength=40;
+  const l1=el("label","Ім’я");
+  l1.append(n);
+  dlg.append(l1,btn("Змінити ім’я",async()=>{
+    const r=await sb.rpc("teacher_rename",{p_uid:s.id,p_name:n.value});
+    msg.textContent=r.error?"Не вдалося змінити ім’я.":"Ім’я змінено.";
+    if(!r.error)s.display_name=n.value.trim();
+  },"ghost"));
+
+  const p=el("input");
+  p.type="text";p.placeholder="від 6 символів";
+  const l2=el("label","Новий пароль (його видно, щоб ти міг сказати учню)");
+  l2.append(p);
+  dlg.append(l2,btn("Змінити пароль",async()=>{
+    const r=await sb.rpc("teacher_set_password",{p_uid:s.id,p_password:p.value});
+    msg.textContent=r.error?"Не вдалося змінити пароль (мінімум 6 символів).":"Пароль змінено. Учень зможе увійти з новим.";
+    if(!r.error)p.value="";
+  },"ghost"));
+
+  dlg.append(el("p","Нікнейм змінити не можна. Якщо він поганий, видали акаунт, і учень зареєструється знову з новим.","mut"));
+  dlg.append(btn("Видалити акаунт",async()=>{
+    if(!confirm("Видалити акаунт "+s.nick+" разом з усіма результатами? Це не можна скасувати."))return;
+    const r=await sb.rpc("teacher_delete_student",{p_uid:s.id});
+    if(r.error){msg.textContent="Не вдалося видалити.";return}
+    dlg.close();
+    loadTeacher();
+  },"ghost"));
+  dlg.append(msg,btn("Закрити",()=>{dlg.close();loadTeacher()}));
+  dlg.showModal();
+}
+$("miTeacher").addEventListener("click",()=>{toggleMenu(false);showTeacher()});
+$("tBack").addEventListener("click",hideTeacher);
 
 render();
 init();
