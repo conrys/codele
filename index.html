@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="uk">
+<!-- Codele — щоденні задачі з програмування. -->
+<!-- Увесь проєкт в одному файлі: HTML (з чого складається сторінка), CSS (як вона виглядає) і JavaScript (як вона працює). -->
+<!-- Python запускається прямо в браузері завдяки Pyodide, окремий сервер не потрібен. -->
+<!-- Карта файлу: 1) стилі, 2) розмітка, 3) задачі, 4) Python-код перевірки, 5) логіка сторінки. -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codele — щоденна задача з Python</title>
+<!-- Python (Pyodide) завантажується не тут, а всередині Web Worker: див. workerMain у скрипті нижче. -->
+<!-- Бібліотека для роботи з базою Supabase (акаунти та рейтинг). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+/* Кольори збережені змінними (--paper, --ink тощо). Щоб змінити колір усюди, поміняй його тут один раз. */
+:root{--paper:#eef3f8;--grid:#d3dfec;--ink:#1f3a5f;--red:#c8402e;--green:#2e7d5b;--hl:#ffe45c;--hlink:#1f3a5f;--card:#fbfdff;--mut:#5b7089}
+/* Темна тема вмикається сама, якщо в телефоні або комп'ютері обрано темний режим. */
+@media (prefers-color-scheme:dark){:root{--paper:#14202f;--grid:#1f3147;--ink:#dbe7f5;--red:#ff7a66;--green:#5fd0a0;--hl:#e8c93a;--hlink:#14202f;--card:#1a2a3d;--mut:#8ea4bd}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background-color:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;color:var(--ink);font:16px/1.5 "Trebuchet MS",system-ui,sans-serif;padding:16px}
+main{max-width:640px;margin:0 auto}
+/* Для коду беремо моноширинний шрифт: усі літери однакової ширини. */
+code,textarea,.mono{font-family:ui-monospace,"Cascadia Code",Menlo,Consolas,monospace}
+h1{margin:8px 0 0;font-size:28px}
+.sub{color:var(--mut);margin:0 0 16px}
+/* .card — біла картка з рамкою для окремих блоків. */
+.card{background:var(--card);border:2px solid var(--ink);border-radius:6px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 8px;font-size:20px}
+.sig{background:var(--hl);color:var(--hlink);padding:2px 8px;border-radius:3px;display:inline-block}
+textarea{width:100%;min-height:180px;resize:vertical;font-size:15px;line-height:1.5;tab-size:4;background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px;padding:12px}
+textarea:disabled{opacity:.5}
+textarea:focus,button:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+/* .bar — рядок кнопок. flex-wrap переносить кнопки на новий рядок, якщо не вміщаються. */
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
+button{font:inherit;font-weight:700;background:var(--ink);color:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:10px 18px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink)}
+button:disabled{opacity:.5;cursor:wait}
+#status{color:var(--mut)}
+/* .stats — три колонки з цифрами (токени, кроки, рекорд). */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stat b{display:block;font-size:34px;line-height:1.1}
+.stat span{font-size:13px;color:var(--mut)}
+.row{display:flex;gap:8px;padding:6px 0;border-top:1px dashed var(--grid);font-size:14px;overflow-wrap:anywhere}
+.ok{color:var(--green);font-weight:700}
+.bad{color:var(--red);font-weight:700}
+.err{color:var(--red);white-space:pre-wrap}
+small{color:var(--mut)}
+select{font:inherit;padding:9px 10px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink);max-width:100%}
+/* Значок «вставлено». */
+.badge{background:var(--hl);color:var(--hlink);font-weight:700;font-size:13px;padding:2px 8px;border-radius:3px}
+/* Повідомлення, що ненадовго з'являється внизу екрана. */
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:12px 16px;border-radius:6px;box-shadow:0 2px 0 var(--hl)}
+#toast[hidden]{display:none}
+details.card summary{cursor:pointer;font-weight:700}
+details.card ul{margin:8px 0 0;padding-left:20px}
+@media (prefers-reduced-motion:no-preference){.stat b{transition:color .2s}}
+/* Шапка сторінки та випадне меню. */
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.menu{position:relative}
+#menuList{position:absolute;right:0;top:calc(100% + 6px);z-index:5;list-style:none;margin:0;padding:6px;background:var(--card);border:2px solid var(--ink);border-radius:6px;min-width:160px}
+#menuList[hidden]{display:none}
+#menuList button{width:100%;text-align:left;background:transparent;color:var(--ink);border:0;padding:8px 10px}
+#menuList button:hover:not(:disabled){background:var(--hl);color:var(--hlink)}
+/* Вікно з правилами. */
+dialog{background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px;max-width:min(520px,calc(100% - 32px));padding:20px}
+dialog::backdrop{background:rgba(20,32,47,.6)}
+dialog ul{padding-left:20px}
+/* Форма входу та рейтинг */
+label{display:block;margin-bottom:6px}
+input[type=text],input[type=password]{width:100%;padding:10px;margin:4px 0 8px;font:inherit;background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px}
+input:disabled{opacity:.6}
+input:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+#boardBody table{width:100%;border-collapse:collapse;font-size:15px}
+#boardBody td{padding:8px 4px;border-top:1px dashed var(--grid)}
+#boardBody tr{cursor:pointer}
+#boardBody tr.me td{background:var(--hl);color:var(--hlink)}
+#boardBody .place{font-weight:700;width:30px}
+</style>
+</head>
+<body>
+<!-- РОЗМІТКА (HTML). Блоки йдуть зверху вниз: шапка, правила, вкладки, умова, поле коду, кнопки, цифри, результати. -->
+<main>
+  <!-- Шапка: назва та меню. -->
+  <header class="top">
+    <h1>Codele</h1>
+    <nav class="menu">
+      <button id="menuBtn" class="ghost" aria-expanded="false" aria-controls="menuList">Меню</button>
+      <ul id="menuList" hidden>
+        <li><button id="miProfile" disabled title="З’явиться разом з акаунтами">Профіль</button></li>
+        <li><button id="miRules">Правила</button></li>
+        <li><button id="miLogout">Вийти</button></li>
+      </ul>
+    </nav>
+  </header>
+  <!-- Правила. Це вбудоване у браузер вікно (тег dialog), відкривається з меню. Текст правил можна змінювати прямо тут. -->
+  <dialog id="rulesDlg" aria-labelledby="rulesTitle">
+    <h2 id="rulesTitle">Правила Codele</h2>
+    <ul>
+      <li>Щодня є одна нова задача. Напиши функцію, яка проходить усі тести.</li>
+      <li>Чим коротший код, тим краще. Ми рахуємо токени — це маленькі частини коду: слова, числа й знаки. Пробіли, відступи, порожні рядки та коментарі не рахуються.</li>
+      <li>Вище в рейтингу той, у кого менше токенів. Якщо їх порівну — той, чий код виконується за менше кроків. Якщо й кроків порівну — ви ділите місце.</li>
+      <li>Вставляти код можна. Але у щоденній задачі вставлений код отримає значок «вставлено», а вчитель побачить, що саме вставили.</li>
+      <li>Марафон — серія задач від легкої до складної. Секундомір іде, поки ти проходиш усі. Вище той, хто швидший, а якщо час однаковий — у кого менше токенів.</li>
+      <li>Практика — без рейтингу. Вставляй і пробуй, скільки хочеш. Кількість спроб бачиш тільки ти. Вчитель бачить лише те, що ти тренувався.</li>
+      <li>Рейтинг починається заново першого числа кожного місяця (за київським часом). Найкращі отримують кубки: золотий, срібний і бронзовий.</li>
+    </ul>
+    <button id="rulesClose">Закрити</button>
+  </dialog>
+  <!-- Вхід і реєстрація. Поки не увійшов, решту сторінки не показуємо. -->
+  <section id="auth" class="card" hidden>
+    <h2 id="authTitle">Вхід</h2>
+    <label>Нікнейм<input id="aNick" type="text" autocapitalize="off" autocomplete="username" placeholder="наприклад, kodo_kit"></label>
+    <label>Пароль<input id="aPass" type="password" autocomplete="current-password"></label>
+    <div id="regFields" hidden>
+      <label>Ім’я<input id="aName" type="text" autocomplete="name" placeholder="Як тебе звати"></label>
+      <label>Код класу<input id="aCode" type="text" autocapitalize="characters" placeholder="його дасть вчитель"></label>
+    </div>
+    <div class="bar"><button id="aGo">Увійти</button><button id="aSwitch" class="ghost">Зареєструватися</button></div>
+    <p id="aMsg" class="err" hidden></p>
+  </section>
+  <dialog id="profDlg"></dialog>
+
+  <div id="appBody" hidden>
+  <!-- Вкладки режимів: щоденна задача, практика, марафон. Список поруч з'являється в практиці (обрати задачу) і в марафоні (обрати рівень). -->
+  <p class="sub" id="meta"></p>
+  <div class="bar">
+    <button id="tabDaily">Щоденна</button>
+    <button id="tabPractice" class="ghost">Практика</button>
+    <button id="tabRush" class="ghost">Марафон</button>
+    <select id="pick" aria-label="Задача для практики" hidden></select>
+  </div>
+  <p id="attempts" class="sub" hidden></p>
+
+  <!-- Картка з умовою задачі. -->
+  <section class="card">
+    <h2 id="title"></h2>
+    <p id="text"></p>
+    <p>Напиши функцію: <code class="sig" id="sig"></code></p>
+  </section>
+
+  <!-- Поле, куди пишеш код. Під ним кнопки: запуск, старт марафону, копіювання результату. -->
+  <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Твій код"></textarea>
+  <div class="bar">
+    <button id="run" disabled>Запустити</button>
+    <button id="rushStart" hidden>Старт</button>
+    <button id="share" class="ghost" hidden>Скопіювати результат</button>
+    <span class="badge" id="pasteBadge" hidden>📋 вставлено</span>
+    <span id="status">Завантажую Python…</span>
+  </div>
+  <div class="bar"><button id="export" class="ghost" hidden>Журнал вставок (.md)</button></div>
+  <div id="toast" role="status" hidden></div>
+
+  <!-- Три цифри: токени, кроки, а третя залежить від режиму (рекорд, спроби або найкращий час). -->
+  <section class="card stats" aria-live="polite">
+    <div class="stat"><b id="tok">–</b><span>токенів у коді</span></div>
+    <div class="stat"><b id="steps">–</b><span>кроків виконання</span></div>
+    <div class="stat"><b id="best">–</b><span id="bestLbl">твій рекорд (токени)</span></div>
+  </section>
+
+  <!-- Сюди скрипт виводить результат кожного тесту. -->
+  <section class="card" id="results" hidden></section>
+
+  <!-- Рейтинг: щоденний або марафону, залежно від режиму. Наповнюється з бази. -->
+  <section class="card" id="boardCard" hidden>
+    <h2 id="boardTitle"></h2>
+    <div id="boardBody"></div>
+  </section>
+
+  <p><small>Довжину рахуємо в токенах: пробіли, відступи, порожні рядки та коментарі не враховуються. Кроки — це кількість виконаних рядків твого коду на великому тесті. Чим менше, тим краще.</small></p>
+  </div>
+</main>
+
+<script>
+// ЛОГІКА (JavaScript). Ти вчиш Python, тому кілька підказок, як читати цей код:
+// const і let — це змінні (const не можна перевизначати, let можна).
+// function назва(){ } — функція, схоже на def у Python.
+// () => ... — короткий запис функції.
+// // — коментар, як # у Python.
+// $("tok") — наш скорочений запис, який знаходить елемент сторінки з id="tok".
+
+// ЗАДАЧІ для щоденного режиму та практики. Поля кожної задачі:
+// fn — назва функції, яку пише учень; params — її параметри;
+// title і text — назва та умова;
+// tests — список тестів Python-кодом: (аргументи, очікувана відповідь);
+// big — великий тест, на якому рахуємо кроки.
+// Щоб додати задачу, скопіюй один блок і зміни його. Задача дня обирається за датою.
+const TASKS=[
+ {fn:"count_vowels",params:"s",title:"Голосні",text:"Порахуй голосні англійські літери (a, e, i, o, u) у рядку. Регістр не важливий.",
+  tests:"[(('hello',),2),(('PYTHON',),1),(('',),0),(('aeiouAEIOU',),10)]",big:"('abcdefghij'*3000,)"},
+ {fn:"digit_sum",params:"n",title:"Сума цифр",text:"Поверни суму цифр невід’ємного цілого числа.",
+  tests:"[((493,),16),((0,),0),((1000,),1),((99999,),45)]",big:"(10**300-1,)"},
+ {fn:"is_palindrome",params:"s",title:"Паліндром",text:"Поверни True, якщо рядок читається однаково в обидва боки. Регістр не важливий.",
+  tests:"[(('Anna',),True),(('python',),False),(('',),True),(('Racecar',),True)]",big:"('ab'*5000+'ba'*5000,)"},
+ {fn:"second_max",params:"nums",title:"Друге за величиною",text:"Поверни друге за величиною серед різних значень списку. У списку завжди є щонайменше два різні числа.",
+  tests:"[(([3,1,4,1,5],),4),(([10,10,9],),9),(([-1,-5,-3],),-3)]",big:"(list(range(0,6000,2)),)"},
+ {fn:"count_primes",params:"n",title:"Прості числа",text:"Порахуй, скільки простих чисел від 1 до n включно.",
+  tests:"[((10,),4),((2,),1),((1,),0),((30,),10)]",big:"(1000,)"}
+];
+
+// ---------- Марафон: три рівні складності, по дві задачі ----------
+// tests/big — це Python-вирази (рядки), які виконуються в Pyodide.
+// name — назва рівня, tasks — його задачі (проходять по черзі).
+const RUSH=[
+ {name:"Легкий",tasks:[
+  {fn:"is_even",params:"n",title:"Парне число",text:"Поверни True, якщо число парне, і False, якщо непарне.",
+   tests:"[((4,),True),((7,),False),((0,),True),((-3,),False)]",big:"(10**9,)"},
+  {fn:"biggest",params:"nums",title:"Найбільше",text:"Поверни найбільше число зі списку. Список не порожній.",
+   tests:"[(([1,5,3],),5),(([-2,-9],),-2),(([7],),7)]",big:"(list(range(5000)),)"}
+ ]},
+ {name:"Середній",tasks:[
+  {fn:"count_words",params:"s",title:"Слова",text:"Порахуй слова в рядку. Слова розділені одним або кількома пробілами.",
+   tests:"[(('a b c',),3),(('  hi   there ',),2),(('',),0)]",big:"('word '*5000,)"},
+  {fn:"reverse_words",params:"s",title:"Слова навпаки",text:"Поверни рядок, у якому слова йдуть у зворотному порядку. Слова розділені одним пробілом.",
+   tests:"[(('a b c',),'c b a'),(('one',),'one'),(('hello world',),'world hello')]",big:"('w '*3000+'w',)"}
+ ]},
+ {name:"Складний",tasks:[
+  {fn:"fib",params:"n",title:"Фібоначчі",text:"Поверни n-те число Фібоначчі: fib(0)=0, fib(1)=1, далі кожне — сума двох попередніх. Код має працювати швидко навіть для n=300.",
+   tests:"[((0,),0),((1,),1),((10,),55),((20,),6765)]",big:"(300,)"},
+  {fn:"to_binary",params:"n",title:"Двійковий запис",text:"Поверни число n у двійковому вигляді рядком: to_binary(5) → '101', to_binary(0) → '0'. Підказка: ділимо на 2 і записуємо остачі. Спробуй обійтися без готової функції bin().",
+   tests:"[((5,),'101'),((0,),'0'),((10,),'1010'),((255,),'11111111')]",big:"(2**300,)"}
+ ]}
+];
+
+// Python-код перевірки. Його виконує Pyodide у браузері. Нижче кожна частина пояснена окремо.
+const PY=`
+import sys, io, json, tokenize
+# Ці типи токенів не рахуємо: переноси рядків, відступи, коментарі та кінець файлу.
+SKIP={tokenize.NEWLINE,tokenize.NL,tokenize.INDENT,tokenize.DEDENT,tokenize.COMMENT,tokenize.ENDMARKER}
+# Максимум кроків. Якщо код їх перевищив, зупиняємо його (захист від нескінченного циклу).
+LIMIT=2000000
+# Рахує токени (слова, числа, знаки) у коді без тих, що вказані вище.
+def count_tokens(src):
+    return sum(1 for t in tokenize.generate_tokens(io.StringIO(src).readline) if t.type not in SKIP)
+# Те саме, але без помилок: для лічильника під час набору. Значення -1 означає, що код поки не можна розібрати.
+def live(src):
+    try: return count_tokens(src)
+    except Exception: return -1
+# Наша помилка «код працює занадто довго».
+class Limit(Exception): pass
+# Головна функція: запускає код учня, прогоняє тести й повертає результат у форматі JSON.
+def check(src, fname, tests, big):
+    out={'tokens':None,'rows':[],'steps':None,'error':None}
+    n=[0]
+    # «Наглядач»: Python викликає його на кожному рядку коду учня, а ми рахуємо кроки.
+    def tr(frame, ev, arg):
+        if frame.f_code.co_filename!='<user>': return None
+        if ev=='line':
+            n[0]+=1
+            if n[0]>LIMIT: raise Limit('Код виконується занадто довго. Перевір цикли.')
+        return tr
+    # Порядок роботи: рахуємо токени, запускаємо код, прогоняємо тести, рахуємо кроки на великому тесті.
+    try:
+        out['tokens']=count_tokens(src)
+        sys.settrace(tr)
+        g={}
+        exec(compile(src,'<user>','exec'),g)
+        if fname not in g: raise NameError('Не знайдено функцію '+fname)
+        f=g[fname]
+        # Кожен тест: викликаємо функцію учня й порівнюємо відповідь з очікуваною.
+        for a,exp in eval(tests):
+            got=f(*a)
+            out['rows'].append([got==exp, ', '.join(map(repr,a)), repr(exp), repr(got)])
+        # Скидаємо лічильник і рахуємо кроки на великому тесті.
+        n[0]=0
+        f(*eval(big))
+        out['steps']=n[0]
+    # Помилка в коді учня не ламає сторінку, а показується текстом.
+    except BaseException as e:
+        out['error']=type(e).__name__+': '+str(e)
+    # Наглядача обов'язково вимикаємо.
+    finally:
+        sys.settrace(None)
+    return json.dumps(out)
+`;
+
+// Скорочення: $("tok") замість довгого document.getElementById("tok").
+const $=id=>document.getElementById(id);
+// Дата й номер задачі. day — кількість днів від 1970 року, за нею обираємо задачу дня.
+// Беремо київську дату, а не час пристрою: сервер теж рахує «сьогодні» за Києвом.
+function kyivDate(){
+  for(const tz of ["Europe/Kyiv","Europe/Kiev"]){
+    try{return new Intl.DateTimeFormat("en-CA",{timeZone:tz}).format(new Date())}catch(e){}
+  }
+  return new Date().toISOString().slice(0,10);
+}
+const KD=kyivDate(), KP=KD.split("-").map(Number);   // KD — рядок «2026-10-01»
+const d=new Date(Date.UTC(KP[0],KP[1]-1,KP[2]));      // київська дата як «північ за UTC»
+const day=Math.floor(d.getTime()/864e5);
+const num=Math.max(1,day-Math.floor(Date.UTC(2026,8,30)/864e5)+1);
+const dailyTask=TASKS[((day%TASKS.length)+TASKS.length)%TASKS.length];
+// mode — поточний режим ("daily", "practice" або "rush"), task — поточна задача.
+let task=dailyTask, mode="daily";
+// Ключ, під яким рекорд дня зберігається в браузері (localStorage).
+const key="pyday:"+day;
+// py — доступ до Python (з'явиться, коли робітник завантажить Python), last — останній успішний результат.
+let py=null, last=null;
+
+// Практика: дані зберігаємо в браузері. drafts — чернетки коду для кожної задачі.
+const PK="pyday-practice", drafts={};
+TASKS.forEach(t=>{const o=document.createElement("option");o.textContent=t.title;$("pick").append(o)});
+// Читаємо збережені дані практики (спроби та дні тренувань). try/catch потрібен, щоб сторінка не ламалась, якщо збереження недоступне.
+function pdata(){try{return JSON.parse(localStorage.getItem(PK))||{attempts:{},days:[]}}catch(e){return {attempts:{},days:[]}}}
+function pcount(){return pdata().attempts[task.fn]||0}
+// Додаємо одну спробу до задачі й позначаємо, що сьогодні тренувався.
+function pRecord(){
+  const p=pdata();
+  p.attempts[task.fn]=(p.attempts[task.fn]||0)+1;
+  if(!p.days.includes(day))p.days.push(day);
+  try{localStorage.setItem(PK,JSON.stringify(p))}catch(e){}
+  practiceToDb();
+}
+// Показує учню кількість спроб і пояснення, що бачить вчитель.
+function updateAttempts(){
+  if(mode!=="practice")return;
+  $("best").textContent=pcount();
+  $("attempts").textContent="Спроби бачиш тільки ти. Вчитель бачить лише те, чи ти тренувався взагалі"+(pdata().days.includes(day)?" (сьогодні ✓)":"")+".";
+}
+// ---------- Режими: щоденна / практика / марафон ----------
+// IDLE — «порожня» задача, поки в марафоні не натиснули «Старт».
+const IDLE={fn:"",params:"",title:"Марафон",text:"Обери рівень і натисни «Старт». Проходь задачі одну за одною — секундомір іде, доки не пройдеш усі."};
+// Стан марафону: рівень, номер задачі, момент старту, сума токенів.
+const rush={tier:0,idx:0,start:0,tokens:0,running:false,timer:null};
+const RKEY="pyday-rush";
+let rushSummary=null;
+
+// Ключ чернетки: у практиці — своя на кожну задачу
+function curKey(){return mode==="practice"?task.fn:mode==="rush"?"rush":"daily"}
+
+// Список у випадному меню залежить від режиму: задачі (практика) або рівні (марафон)
+function fillPick(){
+  $("pick").textContent="";
+  const list=mode==="rush"?RUSH.map(t=>t.name):TASKS.map(t=>t.title);
+  list.forEach(n=>{const o=document.createElement("option");o.textContent=n;$("pick").append(o)});
+}
+
+// Час у форматі 0:05.3
+function fmt(ms){const s=ms/1000;return Math.floor(s/60)+":"+(s%60).toFixed(1).padStart(4,"0")}
+
+function rushAll(){try{return JSON.parse(localStorage.getItem(RKEY))||{}}catch(e){return {}}}
+function rushBest(){return rushAll()[rush.tier]||null}
+
+function tickClock(){
+  $("attempts").textContent="Задача "+(rush.idx+1)+" з "+RUSH[rush.tier].tasks.length+" · ⏱ "+fmt(performance.now()-rush.start);
+}
+function stopRush(){clearInterval(rush.timer);rush.running=false}
+
+function startRush(){
+  rush.tier=$("pick").selectedIndex;
+  rush.idx=0;
+  rush.tokens=0;
+  rush.running=true;
+  rushSummary=null;
+  rush.pasted=false;
+  rush.start=performance.now();
+  clearInterval(rush.timer);
+  rush.timer=setInterval(tickClock,100);
+  task=RUSH[rush.tier].tasks[0];
+  render();
+}
+
+// Викликається, коли всі тести поточної задачі пройдено
+function rushPassed(res){
+  rush.tokens+=res.tokens;
+  const list=RUSH[rush.tier].tasks;
+  if(rush.idx+1<list.length){
+    rush.idx++;
+    task=list[rush.idx];
+    toast("Вірно! Наступна задача.");
+    render();
+    return;
+  }
+  // Остання задача пройдена: зупиняємо секундомір і зберігаємо найкращий час
+  const ms=performance.now()-rush.start;
+  stopRush();
+  const all=rushAll(), b=all[rush.tier];
+  // Краще: менший час, а за однакового часу — менше токенів
+  if(!b||ms<b.ms||(ms===b.ms&&rush.tokens<b.tokens)){
+    all[rush.tier]={ms:ms,tokens:rush.tokens};
+    try{localStorage.setItem(RKEY,JSON.stringify(all))}catch(e){}
+  }
+  rushSummary="Codele Марафон ("+RUSH[rush.tier].name+") ✅ "+fmt(ms)+" · "+rush.tokens+" токенів"+(rush.pasted?" 📋":"");
+  submitMarathon(ms);
+  task=IDLE;
+  render();
+  $("attempts").textContent="Готово! Час "+fmt(ms)+", токенів разом: "+rush.tokens+".";
+  $("share").hidden=false;
+}
+
+// Перемальовує сторінку під поточний режим
+function render(){
+  const p=mode==="practice", r=mode==="rush";
+  if(r)rush.tier=Math.max(0,$("pick").selectedIndex);
+  const idle=r&&!rush.running;
+  $("meta").textContent=p?"Практика · без рейтингу":r?"Марафон · від легкого до складного":d.toLocaleDateString("uk-UA",{day:"numeric",month:"long",timeZone:"UTC"})+" · задача №"+num;
+  $("title").textContent=task.title;
+  $("text").textContent=task.text;
+  $("sig").textContent="def "+task.fn+"("+task.params+"):";
+  $("sig").parentElement.hidden=!task.fn;
+  const starter="def "+task.fn+"("+task.params+"):\n    ";
+  $("code").value=idle?"":(r||drafts[curKey()]===undefined?starter:drafts[curKey()]);
+  $("code").disabled=idle;
+  $("run").disabled=!py||idle;
+  $("rushStart").hidden=!idle;
+  $("pick").hidden=!(p||r);
+  $("pick").disabled=r&&rush.running;
+  $("attempts").hidden=!(p||r);
+  ["daily","practice","rush"].forEach(m=>{$("tab"+m[0].toUpperCase()+m.slice(1)).className=m===mode?"":"ghost"});
+  $("bestLbl").textContent=p?"спроб у цій задачі":r?"найкращий час":"твій рекорд (токени)";
+  $("results").hidden=true;
+  $("share").hidden=true;
+  $("tok").textContent="–";
+  $("steps").textContent="–";
+  if(p)updateAttempts();
+  else if(r){
+    const b=rushBest();
+    $("best").textContent=b?fmt(b.ms):"–";
+    if(rush.running)tickClock();
+    else $("attempts").textContent="Секундомір піде, коли натиснеш «Старт». Помилки не штрафуються.";
+  }else showBest();
+  if(typeof showPaste==="function")showPaste();
+  if(py&&!idle)updateLive();
+  refreshBoard();
+}
+
+// Перемикання режиму: зберігаємо чернетку, зупиняємо марафон, обираємо задачу й перемальовуємо сторінку.
+function setMode(m){
+  drafts[curKey()]=$("code").value;
+  stopRush();
+  mode=m;
+  fillPick();
+  if(m==="daily")task=dailyTask;
+  else if(m==="practice")task=TASKS[$("pick").selectedIndex];
+  else task=IDLE;
+  render();
+}
+$("tabDaily").addEventListener("click",()=>setMode("daily"));
+$("tabPractice").addEventListener("click",()=>setMode("practice"));
+$("tabRush").addEventListener("click",()=>setMode("rush"));
+$("rushStart").addEventListener("click",startRush);
+$("pick").addEventListener("change",()=>{
+  if(mode==="rush"){stopRush();task=IDLE;render();return}
+  drafts[curKey()]=$("code").value;
+  task=TASKS[$("pick").selectedIndex];
+  render();
+});
+
+// Рекорд дня (щоденний режим): менше токенів, а за однакової кількості — менше кроків.
+function loadBest(){try{return JSON.parse(localStorage.getItem(key))}catch(e){return null}}
+function saveBest(t,s){
+  try{
+    const b=loadBest();
+    if(!b||t<b.tokens||(t===b.tokens&&s<b.steps)) localStorage.setItem(key,JSON.stringify({tokens:t,steps:s}));
+  }catch(e){}
+  showBest();
+}
+function showBest(){const b=loadBest();$("best").textContent=b?b.tokens:"–"}
+showBest();
+
+// Клавіша Tab у полі коду вставляє 4 пробіли (замість переходу до іншої кнопки).
+$("code").addEventListener("keydown",e=>{
+  if(e.key==="Tab"){
+    e.preventDefault();
+    const t=e.target,s=t.selectionStart;
+    t.value=t.value.slice(0,s)+"    "+t.value.slice(t.selectionEnd);
+    t.selectionStart=t.selectionEnd=s+4;
+  }
+});
+// Вставки: якщо вставлено PASTE_MIN символів або більше, записуємо це в журнал і показуємо значок.
+const PASTE_MIN=15, pkey="pyday-paste:"+day;
+let pastes=[];
+try{pastes=JSON.parse(localStorage.getItem(pkey))||[]}catch(e){}
+function showPaste(){const on=mode!=="practice"&&pastes.some(p=>(p.mode||"daily")===mode);$("pasteBadge").hidden=!on;$("export").hidden=!on}
+showPaste();
+// Повідомлення на 5 секунд.
+let toastTimer;
+function toast(msg){
+  const t=$("toast");t.textContent=msg;t.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},5000);
+}
+// Подія paste спрацьовує, коли щось вставляють у поле коду. У практиці вставки не позначаємо.
+$("code").addEventListener("paste",e=>{
+  const text=(e.clipboardData||window.clipboardData).getData("text")||"";
+  if(mode==="practice"||!task.fn||text.length<PASTE_MIN)return;
+  pastes.push({time:new Date().toISOString(),length:text.length,text,mode});
+  try{localStorage.setItem(pkey,JSON.stringify(pastes))}catch(err){}
+  showPaste();
+  if(mode==="rush")rush.pasted=true;
+  pasteToDb(text);
+  toast("Вставлений вміст буде позначено спеціальним значком.");
+});
+// Експорт: збираємо журнал вставок у файл .md і завантажуємо його.
+$("export").addEventListener("click",()=>{
+  let md="# Журнал вставок — Codele №"+num+"\n\n";
+  pastes.forEach((p,i)=>{md+="## Вставка "+(i+1)+" ["+(p.mode||"daily")+"] ("+p.length+" символів, "+p.time+")\n\n```python\n"+p.text+"\n```\n\n"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([md],{type:"text/markdown"}));
+  a.download="paste-log-"+day+".md";a.click();
+  URL.revokeObjectURL(a.href);
+});
+// Лічильник токенів під час набору: рахуємо через 0,25 с після останньої клавіші, щоб не вантажити телефон.
+let timer;
+$("code").addEventListener("input",()=>{
+  if(!py)return;
+  clearTimeout(timer);
+  timer=setTimeout(updateLive,250);
+});
+
+// ---------- Python у Web Worker ----------
+// Web Worker — це окремий «робітник» у браузері. Він виконує код учня осторонь від сторінки:
+// 1) сторінка не зависає, навіть якщо код працює довго;
+// 2) код учня не бачить сторінку, її кнопки та збережені дані;
+// 3) якщо код завис назавжди, ми просто вимикаємо робітника й запускаємо нового.
+// Мережа в робітнику вимикається після запуску Python. Справжній захист даних на сервері
+// (Supabase) зробимо окремо правилами доступу, бо ключ у коді сторінки видно всім.
+
+// Код, який працюватиме всередині робітника. Його окремо ніхто не викликає:
+// ми перетворюємо функцію на текст і віддаємо робітнику.
+function workerMain(){
+  let pyodide=null;
+  // Робітник отримує повідомлення від сторінки: "init", "live" або "check"
+  self.onmessage=async e=>{
+    const m=e.data;
+    if(m.type==="init"){
+      try{
+        importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
+        pyodide=await loadPyodide({indexURL:"https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"});
+        pyodide.runPython(m.py);
+        // Вимикаємо доступ до мережі для коду учня
+        ["fetch","XMLHttpRequest","WebSocket","EventSource","importScripts"].forEach(k=>{
+          try{self[k]=undefined}catch(err){}
+        });
+        postMessage({type:"ready"});
+      }catch(err){
+        postMessage({type:"fail",error:String(err)});
+      }
+      return;
+    }
+    // Рахуємо токени під час набору
+    if(m.type==="live"){
+      postMessage({id:m.id,value:pyodide.globals.get("live")(m.src)});
+    }
+    // Перевіряємо код: тести, токени, кроки
+    if(m.type==="check"){
+      postMessage({id:m.id,value:pyodide.globals.get("check")(m.src,m.fn,m.tests,m.big)});
+    }
+  };
+}
+
+let worker=null;              // поточний робітник
+const pending=new Map();      // очікувані відповіді: номер запиту -> що зробити з відповіддю
+let nextId=1;                 // лічильник номерів запитів
+const CHECK_TIMEOUT=8000;     // скільки мілісекунд чекаємо на перевірку, потім зупиняємо робітника
+
+// Створює робітника і чекає, поки в ньому завантажиться Python
+function startWorker(){
+  const blob=new Blob(["("+workerMain.toString()+")()"],{type:"text/javascript"});
+  worker=new Worker(URL.createObjectURL(blob));
+  return new Promise((resolve,reject)=>{
+    worker.onmessage=e=>{
+      const m=e.data;
+      if(m.type==="ready")resolve();
+      else if(m.type==="fail")reject(new Error(m.error));
+      else if(pending.has(m.id)){pending.get(m.id)(m);pending.delete(m.id)}
+    };
+    worker.onerror=ev=>reject(new Error(ev.message));
+    worker.postMessage({type:"init",py:PY});
+  });
+}
+
+// Надсилає запит робітнику й повертає обіцянку (Promise) з відповіддю.
+// Якщо є timeoutMs і відповіді довго немає, повертає {timeout:true}.
+function ask(msg,timeoutMs){
+  return new Promise(resolve=>{
+    const id=nextId++;
+    let t=null;
+    pending.set(id,m=>{clearTimeout(t);resolve(m)});
+    worker.postMessage(Object.assign({id:id},msg));
+    if(timeoutMs)t=setTimeout(()=>{pending.delete(id);resolve({timeout:true})},timeoutMs);
+  });
+}
+
+// Вимикає завислого робітника й запускає нового
+async function restartWorker(){
+  $("status").textContent="Перезапускаю Python…";
+  worker.terminate();
+  pending.forEach(cb=>cb({timeout:true}));
+  pending.clear();
+  await startWorker();
+}
+
+// Ці два методи використовує решта сторінки
+const pyApi={
+  async live(src){const m=await ask({type:"live",src:src});return m.value},
+  async check(src,fn,tests,big){
+    const m=await ask({type:"check",src:src,fn:fn,tests:tests,big:big},CHECK_TIMEOUT);
+    if(m.timeout){
+      await restartWorker();
+      return JSON.stringify({tokens:null,rows:[],steps:null,error:"Час вийшов: код працює занадто довго. Перевір цикли."});
+    }
+    return m.value;
+  }
+};
+
+// Оновлює лічильник токенів під час набору
+async function updateLive(){
+  const n=await pyApi.live($("code").value);
+  if(n>=0)$("tok").textContent=n;
+}
+
+// Запуск: створюємо робітника, чекаємо на Python і вмикаємо кнопку
+async function init(){
+  try{
+    await startWorker();
+    py=pyApi;
+    $("status").textContent="Готово";
+    $("run").disabled=(mode==="rush"&&!rush.running);
+    updateLive();
+  }catch(e){
+    $("status").textContent="Не вдалося завантажити Python. Перевір інтернет і онови сторінку.";
+  }
+}
+
+// Кнопка «Запустити»: відправляє код на перевірку й показує результати.
+$("run").addEventListener("click",async()=>{
+  $("run").disabled=true;
+  $("status").textContent="Перевіряю…";
+  await new Promise(r=>setTimeout(r,30));
+  // Надсилаємо код робітнику, чекаємо на відповідь і розбираємо її (JSON).
+  const res=JSON.parse(await py.check($("code").value,task.fn,task.tests,task.big));
+  if(mode==="practice"){pRecord();updateAttempts()}
+  const box=$("results");
+  box.hidden=false;
+  box.textContent="";
+  // Малюємо рядок для кожного тесту: ✓ або ✗.
+  res.rows.forEach(r=>{
+    const row=document.createElement("div");row.className="row";
+    const mark=document.createElement("span");mark.className=r[0]?"ok":"bad";mark.textContent=r[0]?"✓":"✗";
+    const txt=document.createElement("span");txt.className="mono";
+    txt.textContent=task.fn+"("+r[1]+") → "+r[3]+(r[0]?"":"  (очікувалось "+r[2]+")");
+    row.append(mark,txt);box.append(row);
+  });
+  if(res.tokens!==null)$("tok").textContent=res.tokens;
+  // Три випадки: помилка в коді, усе пройдено, частина тестів не пройдена.
+  if(res.error){
+    const e=document.createElement("div");e.className="row err";e.textContent=res.error;box.append(e);
+    $("steps").textContent="–";
+    $("share").hidden=true;
+    $("status").textContent="Є помилка";
+  }else if(res.rows.every(r=>r[0])){
+    $("steps").textContent=res.steps.toLocaleString("uk-UA");
+    if(mode==="daily"){saveBest(res.tokens,res.steps);submitDaily(res);}
+    last=res;
+    $("share").hidden=mode!=="daily";
+    $("status").textContent="Усі тести пройдено!";
+  }else{
+    $("steps").textContent="–";
+    $("share").hidden=true;
+    $("status").textContent="Не всі тести пройдено";
+  }
+  $("run").disabled=false;
+  // У марафоні після успішної задачі переходимо до наступної.
+  if(mode==="rush"&&rush.running&&!res.error&&res.rows.every(r=>r[0]))rushPassed(res);
+});
+
+// Кнопка «Скопіювати результат».
+$("share").addEventListener("click",async()=>{
+  const t=(mode==="rush"&&rushSummary)?rushSummary:"Codele №"+num+" ✅ "+last.tokens+" токенів · "+last.steps+" кроків"+(pastes.length?" 📋":"");
+  try{await navigator.clipboard.writeText(t);$("status").textContent="Скопійовано"}
+  catch(e){$("status").textContent=t}
+});
+
+// ---------- Меню та модальне вікно з правилами ----------
+const menuBtn=$("menuBtn"), menuList=$("menuList"), rulesDlg=$("rulesDlg");
+function toggleMenu(open){
+  menuList.hidden=!open;
+  menuBtn.setAttribute("aria-expanded",String(open));
+}
+menuBtn.addEventListener("click",e=>{e.stopPropagation();toggleMenu(menuList.hidden)});
+document.addEventListener("click",()=>toggleMenu(false));
+document.addEventListener("keydown",e=>{if(e.key==="Escape")toggleMenu(false)});
+function openRules(){
+  toggleMenu(false);
+  if(!rulesDlg.open)rulesDlg.showModal();
+  try{history.replaceState(null,"","#rules")}catch(e){}
+}
+$("miRules").addEventListener("click",openRules);
+rulesDlg.addEventListener("close",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}});
+$("rulesClose").addEventListener("click",()=>rulesDlg.close());
+// Клік по затемненню поза вікном також закриває правила
+rulesDlg.addEventListener("click",e=>{if(e.target===rulesDlg)rulesDlg.close()});
+if(location.hash==="#rules")openRules();
+
+// Малюємо початковий стан і запускаємо завантаження Python.
+// ---------- Підключення до Supabase: акаунти, рейтинг, збереження результатів ----------
+// URL і publishable-ключ можна показувати всім: вони публічні за задумом.
+// Дані захищає сама база (правила доступу RLS зі схеми codele-schema.sql), а не цей ключ.
+const SB_URL="https://npspohzhvihmvygfsjgh.supabase.co";
+const SB_KEY="sb_publishable_YnW0KA0RhYyOA2RKULc2bg_JACCjH3c";
+let sb=null;
+try{sb=window.supabase.createClient(SB_URL,SB_KEY)}catch(e){}
+
+let me=null;               // поточний користувач: {id, nick, name, role}
+let authMode="login";      // "login" (вхід), "register" (реєстрація) або "finish" (дореєстрація)
+const emailOf=n=>n+"@codele.invalid";   // пошти в дітей може не бути, тому вигадуємо адресу з ніка
+const NICK_RE=/^[a-z0-9_]{3,20}$/;
+
+function authMsg(t){const m=$("aMsg");m.textContent=t||"";m.hidden=!t}
+
+// Показує форму входу або реєстрації, а сам застосунок ховає
+function showAuth(){
+  $("appBody").hidden=true;
+  $("auth").hidden=false;
+  const reg=authMode!=="login", fin=authMode==="finish";
+  $("authTitle").textContent=fin?"Заверши реєстрацію":reg?"Реєстрація":"Вхід";
+  $("regFields").hidden=!reg;
+  $("aNick").disabled=fin;
+  $("aPass").parentElement.hidden=fin;
+  $("aGo").textContent=fin?"Готово":reg?"Створити акаунт":"Увійти";
+  $("aSwitch").hidden=fin;
+  $("aSwitch").textContent=reg?"У мене вже є акаунт":"Зареєструватися";
+  menuBtn.textContent="Меню";
+}
+function showApp(){
+  $("auth").hidden=true;
+  $("appBody").hidden=false;
+  menuBtn.textContent=me.nick;
+  render();
+}
+
+// Завантажує профіль. Якщо його ще немає, просимо дозаповнити ім'я та код класу.
+async function loadProfile(user){
+  const r=await sb.from("profiles").select("id,nick,display_name,role").eq("id",user.id).maybeSingle();
+  if(r.error){authMsg("Не вдалося отримати профіль: "+r.error.message);showAuth();return}
+  if(!r.data){
+    authMode="finish";
+    $("aNick").value=(user.email||"").split("@")[0];
+    showAuth();
+    return;
+  }
+  me={id:r.data.id,nick:r.data.nick,name:r.data.display_name,role:r.data.role};
+  showApp();
+}
+
+$("aSwitch").addEventListener("click",()=>{
+  authMode=authMode==="login"?"register":"login";
+  authMsg("");
+  showAuth();
+});
+$("aGo").addEventListener("click",async()=>{
+  authMsg("");
+  const nick=$("aNick").value.trim().toLowerCase(), pass=$("aPass").value;
+  const name=$("aName").value.trim(), code=$("aCode").value.trim();
+  if(authMode!=="finish"){
+    if(!NICK_RE.test(nick))return authMsg("Нікнейм: 3–20 символів, лише латинські літери, цифри та _.");
+    if(pass.length<6)return authMsg("Пароль має містити щонайменше 6 символів.");
+  }
+  if(authMode!=="login"&&(!name||!code))return authMsg("Заповни ім’я та код класу.");
+  $("aGo").disabled=true;
+  try{
+    if(authMode==="login"){
+      const r=await sb.auth.signInWithPassword({email:emailOf(nick),password:pass});
+      if(r.error)return authMsg("Не вдалося увійти. Перевір нікнейм і пароль.");
+      await loadProfile(r.data.user);
+    }else{
+      let user;
+      if(authMode==="register"){
+        const r=await sb.auth.signUp({email:emailOf(nick),password:pass});
+        if(r.error)return authMsg(/registered|exists/i.test(r.error.message)?"Такий нікнейм уже зайнятий.":"Не вдалося створити акаунт: "+r.error.message);
+        if(!r.data.session)return authMsg("Для реєстрації вимкни підтвердження пошти в налаштуваннях Supabase.");
+        user=r.data.user;
+      }else{
+        user=(await sb.auth.getUser()).data.user;
+      }
+      const p=await sb.rpc("create_profile",{p_nick:nick,p_name:name,p_code:code});
+      if(p.error){
+        authMode="finish";
+        $("aNick").value=nick;
+        showAuth();
+        return authMsg(/class code/.test(p.error.message)?"Невірний код класу.":"Помилка: "+p.error.message);
+      }
+      await loadProfile(user);
+    }
+  }finally{
+    $("aGo").disabled=false;
+  }
+});
+
+async function logout(){
+  await sb.auth.signOut();
+  me=null;
+  authMode="login";
+  $("aPass").value="";
+  showAuth();
+}
+$("miLogout").addEventListener("click",()=>{toggleMenu(false);logout()});
+
+// Старт: якщо сесія вже є, входимо одразу
+async function authStart(){
+  if(!sb){authMsg("Не вдалося підключитися до бази. Онови сторінку.");showAuth();return}
+  const s=await sb.auth.getSession();
+  if(s.data.session)await loadProfile(s.data.session.user);else showAuth();
+}
+
+// ----- Збереження в базу -----
+function marathonKey(){return KD.slice(0,7)+":"+rush.tier}   // «місяць:рівень»
+
+async function submitDaily(res){
+  if(!me)return;
+  const pasted=pastes.some(p=>(p.mode||"daily")==="daily");
+  const r=await sb.rpc("submit_result",{p_kind:"daily",p_key:KD,p_tokens:res.tokens,p_steps:res.steps,p_ms:null,p_pasted:pasted});
+  if(r.error)toast("Результат не збережено: "+r.error.message);
+  refreshBoard();
+}
+async function submitMarathon(ms){
+  if(!me)return;
+  const r=await sb.rpc("submit_result",{p_kind:"marathon",p_key:marathonKey(),p_tokens:rush.tokens,p_steps:null,p_ms:Math.round(ms),p_pasted:!!rush.pasted});
+  if(r.error)toast("Результат не збережено: "+r.error.message);
+  refreshBoard();
+}
+// У базу йде лише «тренувався сьогодні». Кількість спроб лишається в браузері учня.
+let practiceSent=false;
+function practiceToDb(){
+  if(!me||practiceSent)return;
+  practiceSent=true;
+  sb.from("practice_days").insert({user_id:me.id}).then(()=>{});
+}
+// Журнал вставок для вчителя
+function pasteToDb(text){
+  if(!me)return;
+  const kind=mode==="rush"?"marathon":"daily";
+  const key=kind==="daily"?KD:marathonKey();
+  sb.from("paste_log").insert({user_id:me.id,kind:kind,task_key:key,length:text.length,body:text.slice(0,5000)}).then(()=>{});
+}
+
+// ----- Рейтинг -----
+let boardSeq=0;
+function cell(tr,text,cls){const td=document.createElement("td");td.textContent=text;if(cls)td.className=cls;tr.append(td);return td}
+async function refreshBoard(){
+  const card=$("boardCard");
+  if(!sb||!me||mode==="practice"){card.hidden=true;return}
+  const kind=mode==="rush"?"marathon":"daily";
+  const key=kind==="daily"?KD:KD.slice(0,7)+":"+rush.tier;
+  $("boardTitle").textContent=kind==="daily"?"Рейтинг сьогодні":"Марафон · "+RUSH[rush.tier].name+" · цей місяць";
+  card.hidden=false;
+  const seq=++boardSeq;
+  const r=await sb.rpc("board",{p_kind:kind,p_key:key});
+  if(seq!==boardSeq)return;          // прийшла застаріла відповідь, ігноруємо
+  const box=$("boardBody");
+  box.textContent="";
+  if(r.error){box.textContent="Не вдалося завантажити рейтинг.";return}
+  if(!r.data.length){box.textContent="Поки що ніхто не пройшов. Будь першим!";return}
+  const tbl=document.createElement("table");
+  r.data.forEach(x=>{
+    const tr=document.createElement("tr");
+    if(x.nick===me.nick)tr.className="me";
+    tr.addEventListener("click",()=>openProfile(x.nick));
+    cell(tr,x.place,"place");
+    // Нік і (якщо учень дозволив) ім'я. Усе через textContent, тож чужий текст не виконається.
+    const who=cell(tr,x.nick);
+    if(x.display_name){const s=document.createElement("small");s.textContent=" ("+x.display_name+")";who.append(s)}
+    if(x.pasted){const b=document.createElement("span");b.className="badge";b.textContent="📋 вставлено";who.append(" ",b)}
+    cell(tr,kind==="daily"?x.tokens+" ток. · "+x.steps+" кр.":fmt(x.ms)+" · "+x.tokens+" ток.");
+    tbl.append(tr);
+  });
+  box.append(tbl);
+}
+// Профіль: база віддає лише те, що учень дозволив показувати в профілі
+async function openProfile(nick){
+  const r=await sb.rpc("get_profile",{p_nick:nick});
+  const dlg=$("profDlg");
+  dlg.textContent="";
+  const h=document.createElement("h2");h.textContent=nick;dlg.append(h);
+  const line=t=>{const p=document.createElement("p");p.textContent=t;dlg.append(p)};
+  if(r.error||!r.data){line("Профіль недоступний.")}
+  else{
+    if(r.data.name)line("Ім’я: "+r.data.name);
+    line("Місяців найкращим: "+r.data.months_best);
+    if(r.data.cups)line("Кубків: "+r.data.cups.length);
+    if(r.data.badges)line("Значків: "+r.data.badges.length);
+  }
+  const b=document.createElement("button");b.textContent="Закрити";
+  b.addEventListener("click",()=>dlg.close());
+  dlg.append(b);
+  dlg.showModal();
+}
+
+render();
+init();
+authStart();
+</script>
+</body>
+</html>
