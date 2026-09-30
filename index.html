@@ -76,6 +76,17 @@ input:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
 #boardBody tr{cursor:pointer}
 #boardBody tr.me td{background:var(--hl);color:var(--hlink)}
 #boardBody .place{font-weight:700;width:30px}
+/* Профіль: кубки, значки, таблиця видимості */
+.icons{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.ic{text-align:center;font-size:12px;line-height:1.2;width:76px}
+.ic svg{display:block;margin:0 auto 2px}
+.mut{color:var(--mut);font-size:14px}
+dialog h2{margin:14px 0 6px}
+dialog table{width:100%;border-collapse:collapse}
+dialog th,dialog td{padding:6px 4px;border-top:1px dashed var(--grid);text-align:center}
+dialog th{font-size:13px;color:var(--mut);border-top:0}
+dialog td:first-child{text-align:left}
+input[type=checkbox]{width:20px;height:20px}
 </style>
 </head>
 <body>
@@ -87,7 +98,7 @@ input:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
     <nav class="menu">
       <button id="menuBtn" class="ghost" aria-expanded="false" aria-controls="menuList">Меню</button>
       <ul id="menuList" hidden>
-        <li><button id="miProfile" disabled title="З’явиться разом з акаунтами">Профіль</button></li>
+        <li><button id="miProfile">Профіль</button></li>
         <li><button id="miRules">Правила</button></li>
         <li><button id="miLogout">Вийти</button></li>
       </ul>
@@ -120,6 +131,7 @@ input:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
     <p id="aMsg" class="err" hidden></p>
   </section>
   <dialog id="profDlg"></dialog>
+  <dialog id="meDlg"></dialog>
 
   <div id="appBody" hidden>
   <!-- Вкладки режимів: щоденна задача, практика, марафон. Список поруч з'являється в практиці (обрати задачу) і в марафоні (обрати рівень). -->
@@ -884,6 +896,128 @@ async function openProfile(nick){
   dlg.append(b);
   dlg.showModal();
 }
+
+// ---------- Мій профіль ----------
+// Кубки за місце в місячному рейтингу: 1 — золото, 2 — срібло, 3 — бронза.
+const CUP_COLORS={1:"#e6b422",2:"#a8b2bd",3:"#b87333"};
+const CUP_NAMES={1:"Золото",2:"Срібло",3:"Бронза"};
+// Значки: ключ — id у базі, c — колір, g — символ усередині. Нові значки додаються сюди.
+const BADGES={
+  first:{t:"Перший розв’язок",c:"#2e7d5b",g:"✓"},
+  streak3:{t:"Серія 3 дні",c:"#c8402e",g:"3"},
+  short:{t:"Коротше за еталон",c:"#3a6ea5",g:"✂"},
+  clean:{t:"Марафон без вставок",c:"#8a5cc2",g:"★"}
+};
+// Кубок малюється одним шаблоном SVG, змінюється тільки колір заливки.
+function cupSvg(c){
+  return '<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true"><path d="M14 8h20v12a10 10 0 0 1-20 0z" fill="'+c+'" stroke="var(--ink)" stroke-width="2"/><path d="M14 12H8v3a6 6 0 0 0 6 6M34 12h6v3a6 6 0 0 1-6 6M24 30v6M19 36h10M16 41h16" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/></svg>';
+}
+function badgeSvg(b){
+  return '<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="'+b.c+'" stroke="var(--ink)" stroke-width="2"/><text x="24" y="31" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">'+b.g+'</text></svg>';
+}
+// Маленький помічник: створює елемент з текстом і (за потреби) класом
+function el(tag,text,cls){
+  const e=document.createElement(tag);
+  if(text!==undefined)e.textContent=text;
+  if(cls)e.className=cls;
+  return e;
+}
+
+async function openMyProfile(){
+  const dlg=$("meDlg");
+  dlg.textContent="Завантажую…";
+  dlg.showModal();
+  // Три запити одночасно: профіль, кубки, значки. Правила доступу віддадуть лише твої дані.
+  const q=await Promise.all([
+    sb.from("profiles").select("nick,display_name,role,vis").eq("id",me.id).single(),
+    sb.from("monthly_winners").select("place").eq("user_id",me.id),
+    sb.from("user_badges").select("badge_id").eq("user_id",me.id)
+  ]);
+  const pr=q[0], wins=q[1].data||[], got=q[2].data||[];
+  dlg.textContent="";
+  const close=el("button","Закрити");
+  close.addEventListener("click",()=>dlg.close());
+  if(pr.error){dlg.append(el("p","Не вдалося завантажити профіль."),close);return}
+  const vis=pr.data.vis;
+  const msg=el("p","","mut");
+
+  dlg.append(el("h2",pr.data.nick+(pr.data.role==="teacher"?" · вчитель":"")));
+
+  // Ім'я можна змінити (нік змінити не можна)
+  const nameIn=el("input");
+  nameIn.type="text";nameIn.value=pr.data.display_name;nameIn.maxLength=40;
+  const label=el("label","Ім’я");
+  label.append(nameIn);
+  const save=el("button","Зберегти ім’я","ghost");
+  save.addEventListener("click",async()=>{
+    const v=nameIn.value.trim();
+    if(!v){msg.textContent="Ім’я не може бути порожнім.";return}
+    const r=await sb.from("profiles").update({display_name:v}).eq("id",me.id);
+    msg.textContent=r.error?"Не вдалося зберегти.":"Збережено.";
+    if(!r.error)me.name=v;
+  });
+  dlg.append(label,save,msg);
+
+  // Статистика
+  const best=wins.filter(w=>w.place===1).length;
+  const attempts=Object.values(pdata().attempts).reduce((a,b)=>a+b,0);
+  dlg.append(el("p","Місяців найкращим: "+best,"mut"));
+  dlg.append(el("p","Спроб у практиці: "+attempts+" (це бачиш тільки ти)","mut"));
+
+  // Кубки
+  dlg.append(el("h2","Кубки"));
+  const cups=el("div",undefined,"icons");
+  [1,2,3].forEach(p=>{
+    const n=wins.filter(w=>w.place===p).length;
+    if(!n)return;
+    const d1=el("div",undefined,"ic");
+    d1.innerHTML=cupSvg(CUP_COLORS[p]);          // SVG наш власний, тому innerHTML безпечний
+    d1.append(CUP_NAMES[p]+" ×"+n);
+    cups.append(d1);
+  });
+  dlg.append(cups.children.length?cups:el("p","Кубків ще немає. Їх дають першого числа місяця.","mut"));
+
+  // Значки
+  dlg.append(el("h2","Значки"));
+  const bd=el("div",undefined,"icons");
+  got.forEach(x=>{
+    const b=BADGES[x.badge_id];
+    if(!b)return;
+    const d2=el("div",undefined,"ic");
+    d2.innerHTML=badgeSvg(b);
+    d2.append(b.t);
+    bd.append(d2);
+  });
+  dlg.append(bd.children.length?bd:el("p","Значків поки немає. Частину з них треба ще відшукати.","mut"));
+
+  // Що бачать інші: перша колонка — у таблиці рейтингу, друга — у профілі
+  dlg.append(el("h2","Що бачать інші"));
+  const tbl=el("table");
+  tbl.innerHTML="<tr><th></th><th>У таблиці</th><th>У профілі</th></tr>";
+  [["name","Ім’я"],["cups","Кубки"],["bd","Значки"]].forEach(row=>{
+    const k=row[0], tr=el("tr");
+    tr.append(el("td",row[1]));
+    [0,1].forEach(i=>{
+      const td=el("td"), cb=el("input");
+      cb.type="checkbox";
+      cb.checked=!!vis[k][i];
+      cb.setAttribute("aria-label",row[1]+(i?" у профілі":" у таблиці"));
+      cb.addEventListener("change",async()=>{
+        vis[k][i]=cb.checked;
+        const r=await sb.from("profiles").update({vis:vis}).eq("id",me.id);
+        if(r.error){cb.checked=!cb.checked;vis[k][i]=cb.checked;msg.textContent="Не вдалося зберегти."}
+        else msg.textContent="Збережено.";
+      });
+      td.append(cb);
+      tr.append(td);
+    });
+    tbl.append(tr);
+  });
+  dlg.append(tbl);
+  dlg.append(el("p","Нікнейм видно завжди. Вчитель бачить лише те, чи ти тренувався.","mut"));
+  dlg.append(close);
+}
+$("miProfile").addEventListener("click",()=>{toggleMenu(false);openMyProfile()});
 
 render();
 init();
