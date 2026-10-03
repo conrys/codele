@@ -1,4 +1,4 @@
-<!doctype html> 
+<!doctype html>
 <html lang="uk">
 <!-- Codele — щоденні задачі з програмування. -->
 <!-- Увесь проєкт в одному файлі: HTML (з чого складається сторінка), CSS (як вона виглядає) і JavaScript (як вона працює). -->
@@ -96,6 +96,13 @@ pre{background:var(--paper);padding:8px;border-radius:4px;overflow-x:auto;font-s
 #tBody th{font-size:12px;color:var(--mut);border-top:0}
 dialog button{margin:4px 6px 4px 0}
 details{margin:6px 0}
+/* Вікно tkinter у попередньому перегляді */
+.tk-window{border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#f0f0f0;color:#111}
+.tk-title{background:var(--ink);color:var(--paper);padding:4px 10px;font-size:13px}
+.tk-body{padding:12px;min-height:80px}
+.tk-label{padding:2px 4px}
+.tk-btn{background:#e1e1e1;color:#111;border:1px solid #888;border-radius:3px;padding:4px 12px;font-weight:400}
+.tk-body input{width:160px;margin:0;padding:3px 6px;border:1px solid #888;border-radius:2px;background:#fff;color:#111}
 </style>
 </head>
 <body>
@@ -118,11 +125,11 @@ details{margin:6px 0}
   <dialog id="rulesDlg" aria-labelledby="rulesTitle">
     <h2 id="rulesTitle">Правила Codele</h2>
     <ul>
-      <li>Щодня є одна нова задача. Напиши функцію, яка проходить усі тести.</li>
+      <li>Нова задача з’являється кожні 3 дні. Виконай завдання так, щоб усі перевірки були зеленими.</li>
       <li>Чим коротший код, тим краще. Ми рахуємо токени — це маленькі частини коду: слова, числа й знаки. Пробіли, відступи, порожні рядки та коментарі не рахуються.</li>
       <li>Вище в рейтингу той, у кого менше токенів. Якщо їх порівну — той, чий код виконується за менше кроків. Якщо й кроків порівну — ви ділите місце.</li>
       <li>Вставляти код можна. Але у щоденній задачі вставлений код отримає значок «вставлено», а вчитель побачить, що саме вставили.</li>
-      <li>У щоденній задачі є 5 спроб на день. Помилка в написанні коду (наприклад, забута дужка) спробою не вважається. У практиці спроб можна скільки завгодно.</li>
+      <li>На задачу є 5 спроб щодня (спроби оновлюються о 00:00 за київським часом). Помилка в написанні коду (наприклад, забута дужка) спробою не вважається. У практиці спроб можна скільки завгодно.</li>
       <li>Марафон — серія задач від легкої до складної. Секундомір іде, поки ти проходиш усі. Вище той, хто швидший, а якщо час однаковий — у кого менше токенів.</li>
       <li>Практика — без рейтингу. Вставляй і пробуй, скільки хочеш. Кількість спроб бачиш тільки ти. Вчитель бачить лише те, що ти тренувався.</li>
       <li>Рейтинг починається заново першого числа кожного місяця (за київським часом). Найкращі отримують кубки: золотий, срібний і бронзовий.</li>
@@ -149,7 +156,7 @@ details{margin:6px 0}
   <!-- Вкладки режимів: щоденна задача, практика, марафон. Список поруч з'являється в практиці (обрати задачу) і в марафоні (обрати рівень). -->
   <p class="sub" id="meta"></p>
   <div class="bar">
-    <button id="tabDaily">Щоденна</button>
+    <button id="tabDaily">Задача</button>
     <button id="tabPractice" class="ghost">Практика</button>
     <button id="tabRush" class="ghost">Марафон</button>
     <select id="pick" aria-label="Задача для практики" hidden></select>
@@ -190,6 +197,17 @@ details{margin:6px 0}
 
   <!-- Сюди скрипт виводить результат кожного тесту. -->
   <section class="card" id="results" hidden></section>
+  <!-- Вікно tkinter (показується, коли код його створює) -->
+  <section class="card" id="tkBox" hidden>
+    <h2>Вікно програми</h2>
+    <div class="tk-window"><div id="tkTitle" class="tk-title"></div><div id="tkWin" class="tk-body"></div></div>
+    <pre id="tkOut" hidden></pre>
+  </section>
+  <!-- Малюнок черепашки (показується, коли код використовує turtle) -->
+  <section class="card" id="drawBox" hidden>
+    <h2>Малюнок</h2>
+    <canvas id="drawing" width="640" height="480" aria-label="Малюнок черепашки" style="width:100%;max-width:360px;height:auto;border:1px solid var(--grid);border-radius:4px"></canvas>
+  </section>
 
   <!-- Рейтинг: щоденний або марафону, залежно від режиму. Наповнюється з бази. -->
   <section class="card" id="boardCard" hidden>
@@ -214,13 +232,52 @@ details{margin:6px 0}
 // // — коментар, як # у Python.
 // $("tok") — наш скорочений запис, який знаходить елемент сторінки з id="tok".
 
-// ЗАДАЧІ для щоденного режиму та практики. Поля кожної задачі:
-// fn — назва функції, яку пише учень; params — її параметри;
-// title і text — назва та умова;
-// tests — список тестів Python-кодом: (аргументи, очікувана відповідь);
-// big — великий тест, на якому рахуємо кроки.
+// ЗАДАЧІ для щоденного режиму та практики. Є два види задач.
+// 1) Задачі на print і класи (поле expect): учень пише звичайний код, ми запускаємо його
+//    і порівнюємо те, що він вивів, з очікуваним. Поля:
+//      id — коротка назва задачі (за нею шукається урок), title і text — назва та умова,
+//      expect — очікуваний вивід, start — що стоїть у полі коду на початку,
+//      needs — які класи мають бути створені, inst — які змінні мають бути об'єктами якого класу,
+//      has — що має бути в класі чи об'єкті (атрибути та методи).
+// 2) Задачі-функції (поле fn) лежать нижче в BONUS, вони для практики. Поля: fn, params, title, text,
+//    tests (Python-код зі списком тестів) і big (великий тест, на якому рахуємо кроки).
 // Щоб додати задачу, скопіюй один блок і зміни його. Задача дня обирається за датою.
 const TASKS=[
+ {id:"hello",title:"Перший print",text:"Виведи на екран рівно такий текст: Привіт, світе!",
+  expect:"Привіт, світе!",start:""},
+ {id:"print_many",title:"Кілька значень",text:"Одним print виведи: Мені 14 років. Число 14 запиши без лапок, окремим значенням через кому.",
+  expect:"Мені 14 років",start:""},
+ {id:"class_object",title:"Клас і об’єкт",text:"Створи порожній клас Cat і об’єкт tom цього класу. Потім виведи результат isinstance(tom, Cat).",
+  expect:"True",needs:["Cat"],inst:{tom:"Cat"},start:""},
+ {id:"class_attr",title:"Атрибут класу",text:"Створи клас Dog з атрибутом name, значення якого — Рекс. Виведи Dog.name.",
+  expect:"Рекс",needs:["Dog"],has:{Dog:["name"]},start:""},
+ {id:"object_attr",title:"Атрибути об’єкта",text:"Створи порожній клас Dog і об’єкт d. Задай d.name = Рекс та d.age = 3. Одним print виведи ім’я та вік.",
+  expect:"Рекс 3",needs:["Dog"],inst:{d:"Dog"},has:{d:["name","age"]},start:""},
+ {id:"two_objects",title:"Два об’єкти",text:"Створи порожній клас Dog і два об’єкти a та b. Задай a.name = Рекс, b.name = Бім. Одним print виведи обидва імені.",
+  expect:"Рекс Бім",needs:["Dog"],inst:{a:"Dog",b:"Dog"},has:{a:["name"],b:["name"]},start:""},
+ {id:"method",title:"Метод",text:"Створи клас Dog з методом speak, який виводить Гав! Створи об’єкт d і виклич d.speak().",
+  expect:"Гав!",needs:["Dog"],inst:{d:"Dog"},has:{Dog:["speak"]},start:""},
+ {id:"t_square",title:"Квадрат черепашкою",text:"Підключи turtle, створи черепашку t і намалюй квадрат зі стороною 100 (команди forward і left).",
+  turtle:{poly:{n:4,side:100}},uses:["Import"],start:""},
+ {id:"t_loop",title:"Квадрат циклом",text:"Намалюй такий самий квадрат зі стороною 100, але вже за допомогою циклу for.",
+  turtle:{poly:{n:4,side:100}},uses:["For"],start:""},
+ {id:"t_triangle",title:"Червоний трикутник",text:"Намалюй червоний рівносторонній трикутник зі стороною 80. Колір задай командою t.color(\"red\").",
+  turtle:{poly:{n:3,side:80},colors:["red"]},uses:["Import"],start:""},
+ {id:"tk_window",title:"Перше вікно",text:"Створи вікно tkinter із заголовком Привіт і написом (Label) Моє перше вікно. Не забудь розмістити напис і запустити mainloop().",
+  tk:{title:"Привіт",widgets:[{type:"Label",text:"Моє перше вікно"}]},uses:["Import"],start:""},
+ {id:"tk_button",title:"Кнопка",text:"Зроби вікно з написом Натисни мене! і кнопкою Натисни. Коли кнопку натискають, напис має змінитися на Готово! Кнопка має викликати твою функцію.",
+  tk:{widgets:[{type:"Label",text:"Натисни мене!"},{type:"Button",text:"Натисни"}],
+      runs:[{actions:[{click:"Натисни"}],after:[{type:"Label",text:"Готово!"}]}]},uses:["Import","FunctionDef"],start:""},
+ {id:"tk_entry",title:"Привітання",text:"Зроби поле вводу (Entry), кнопку Привітати та напис. Після натискання кнопки напис має показати: Привіт, ім’я! Наприклад, для Оля — Привіт, Оля!",
+  tk:{widgets:[{type:"Entry"},{type:"Button",text:"Привітати"}],
+      runs:[{actions:[{entry:0,text:"Оля"},{click:"Привітати"}],after:[{type:"Label",text:"Привіт, Оля!"}]},
+            {actions:[{entry:0,text:"Макс"},{click:"Привітати"}],after:[{type:"Label",text:"Привіт, Макс!"}]}]},uses:["Import","FunctionDef"],start:""}
+
+
+];
+
+// BONUS — задачі-функції для практики («для досвідчених»). У щоденний режим вони не потрапляють.
+const BONUS=[
  {fn:"count_vowels",params:"s",title:"Голосні",text:"Порахуй голосні англійські літери (a, e, i, o, u) у рядку. Регістр не важливий.",
   tests:"[(('hello',),2),(('PYTHON',),1),(('',),0),(('aeiouAEIOU',),10)]",big:"('abcdefghij'*3000,)"},
  {fn:"digit_sum",params:"n",title:"Сума цифр",text:"Поверни суму цифр невід’ємного цілого числа.",
@@ -232,37 +289,79 @@ const TASKS=[
  {fn:"count_primes",params:"n",title:"Прості числа",text:"Порахуй, скільки простих чисел від 1 до n включно.",
   tests:"[((10,),4),((2,),1),((1,),0),((30,),10)]",big:"(1000,)"}
 ];
+// Усі задачі практики: спершу прості, потім бонусні
+const PRACT=TASKS.concat(BONUS);
 
 // ---------- Марафон: три рівні складності, по дві задачі ----------
-// tests/big — це Python-вирази (рядки), які виконуються в Pyodide.
-// name — назва рівня, tasks — його задачі (проходять по черзі).
+// name — назва рівня, tasks — його задачі (проходять по черзі). Поля задач такі самі, як у TASKS.
 const RUSH=[
  {name:"Легкий",tasks:[
-  {fn:"is_even",params:"n",title:"Парне число",text:"Поверни True, якщо число парне, і False, якщо непарне.",
-   tests:"[((4,),True),((7,),False),((0,),True),((-3,),False)]",big:"(10**9,)"},
-  {fn:"biggest",params:"nums",title:"Найбільше",text:"Поверни найбільше число зі списку. Список не порожній.",
-   tests:"[(([1,5,3],),5),(([-2,-9],),-2),(([7],),7)]",big:"(list(range(5000)),)"}
+  {id:"r_lines",title:"Три рядки",text:"Трьома print виведи по одному слову в рядок: Раз, Два, Три.",
+   expect:"Раз\nДва\nТри",start:""},
+  {id:"r_math",title:"Порахуй",text:"Виведи результат виразу 2 + 3 * 4. Порахуй його самим Python.",
+   expect:"14",start:""}
  ]},
  {name:"Середній",tasks:[
-  {fn:"count_words",params:"s",title:"Слова",text:"Порахуй слова в рядку. Слова розділені одним або кількома пробілами.",
-   tests:"[(('a b c',),3),(('  hi   there ',),2),(('',),0)]",big:"('word '*5000,)"},
-  {fn:"reverse_words",params:"s",title:"Слова навпаки",text:"Поверни рядок, у якому слова йдуть у зворотному порядку. Слова розділені одним пробілом.",
-   tests:"[(('a b c',),'c b a'),(('one',),'one'),(('hello world',),'world hello')]",big:"('w '*3000+'w',)"}
+  {id:"r_attr",title:"Атрибут класу",text:"Створи клас Cat з атрибутом name = Мурка. Виведи Cat.name.",
+   expect:"Мурка",needs:["Cat"],has:{Cat:["name"]},start:""},
+  {id:"r_obj",title:"Об’єкт з іменем",text:"Створи порожній клас Dog і об’єкт d. Задай d.name = Рекс і виведи d.name.",
+   expect:"Рекс",needs:["Dog"],inst:{d:"Dog"},has:{d:["name"]},start:""}
  ]},
  {name:"Складний",tasks:[
-  {fn:"fib",params:"n",title:"Фібоначчі",text:"Поверни n-те число Фібоначчі: fib(0)=0, fib(1)=1, далі кожне — сума двох попередніх. Код має працювати швидко навіть для n=300.",
-   tests:"[((0,),0),((1,),1),((10,),55),((20,),6765)]",big:"(300,)"},
-  {fn:"to_binary",params:"n",title:"Двійковий запис",text:"Поверни число n у двійковому вигляді рядком: to_binary(5) → '101', to_binary(0) → '0'. Підказка: ділимо на 2 і записуємо остачі. Спробуй обійтися без готової функції bin().",
-   tests:"[((5,),'101'),((0,),'0'),((10,),'1010'),((255,),'11111111')]",big:"(2**300,)"}
+  {id:"r_two",title:"Два песики",text:"Створи порожній клас Dog і два об’єкти a та b з іменами Рекс і Бім. Одним print виведи обидва імені.",
+   expect:"Рекс Бім",needs:["Dog"],inst:{a:"Dog",b:"Dog"},has:{a:["name"],b:["name"]},start:""},
+  {id:"r_method",title:"Гавкає!",text:"Створи клас Dog з методом speak, який виводить Гав! Створи об’єкт d і виклич метод двічі.",
+   expect:"Гав!\nГав!",needs:["Dog"],inst:{d:"Dog"},has:{Dog:["speak"]},start:""}
  ]}
 ];
+// Кожна задача має id. У задач-функцій він збігається з назвою функції.
+BONUS.forEach(t=>{t.id=t.fn});
 
 // Python-код перевірки. Його виконує Pyodide у браузері. Нижче кожна частина пояснена окремо.
 // ---------- Уроки ----------
 // Над кожною задачею показується короткий урок: тема, пояснення і приклад.
-// Ключ — назва функції задачі (fn). Щоб додати урок, скопіюй один блок і зміни текст.
+// Ключ — id задачі (у задач-функцій це назва функції). Щоб додати урок, скопіюй один блок і зміни текст.
 // text — абзаци пояснення, example — приклад коду (не розв'язок задачі).
 const LESSONS={
+ tk_window:{topic:"tkinter: вікно і напис",
+  text:["tkinter — модуль для вікон. Tk() створює головне вікно, а Label — напис у ньому.","Щоб віджет з’явився, його треба розмістити командою pack(). А mainloop() запускає вікно."],
+  example:"import tkinter as tk\n\nroot = tk.Tk()\nroot.title(\"Моє вікно\")\ntk.Label(root, text=\"Привіт\").pack()\nroot.mainloop()"},
+ tk_button:{topic:"кнопка і функція",
+  text:["Button(root, text=\"...\", command=функція) викликає функцію, коли кнопку натискають. Дужки після назви функції в command не пишемо.","Змінити напис можна так: напис.config(text=\"нове\"). Напис треба зберегти у змінну, щоб потім його змінювати."],
+  example:"def hello():\n    lbl.config(text=\"Клік!\")\n\nlbl = tk.Label(root, text=\"...\")\nlbl.pack()\ntk.Button(root, text=\"OK\", command=hello).pack()"},
+ tk_entry:{topic:"поле вводу Entry",
+  text:["Entry — поле, куди користувач пише текст. Метод get() повертає те, що там набрано.","Зберігай поле у змінну, щоб у функції викликати змінна.get()."],
+  example:"e = tk.Entry(root)\ne.pack()\n\ndef show():\n    print(e.get())"},
+ t_square:{topic:"turtle: черепашка-об’єкт",
+  text:["turtle — це модуль для малювання. Черепашка — об’єкт: ми створюємо її командою turtle.Turtle().","Команди: forward(50) — вперед на 50, left(90) — повернути ліворуч на 90 градусів. Черепашка лишає за собою слід.","Квадрат — це чотири однакові сторони й чотири повороти."],
+  example:"import turtle\n\nt = turtle.Turtle()   # створюємо черепашку\nt.forward(50)         # вперед\nt.left(90)            # повернути ліворуч\nt.forward(50)"},
+ t_loop:{topic:"цикл for у малюванні",
+  text:["Коли дії повторюються, їх зручно записати в цикл: for i in range(3): виконає тіло циклу 3 рази.","Тіло циклу пишемо з відступом."],
+  example:"import turtle\n\nt = turtle.Turtle()\nfor i in range(3):\n    t.forward(50)\n    t.left(120)      # вийде трикутник"},
+ t_triangle:{topic:"кольори й кути",
+  text:["Колір лінії задає t.color(\"назва\"), наприклад \"blue\" або \"red\". Викликати треба до того, як малюєш.","Щоб замкнути багатокутник із n сторін, на кожному куті повертай на 360 / n градусів. Для трикутника це 120."],
+  example:"import turtle\n\nt = turtle.Turtle()\nt.color(\"blue\")\nfor i in range(5):\n    t.forward(40)\n    t.left(72)       # 360 / 5 = 72"},
+ hello:{topic:"функція print",
+  text:["print() виводить текст на екран.","Текст записуємо в лапках: подвійних \" або одинарних '."],
+  example:"print(\"Hello!\")"},
+ print_many:{topic:"print з кількома значеннями",
+  text:["У print() можна вказати кілька значень через кому. Між ними Python сам поставить пробіл.","Числа лапками не обгортаємо."],
+  example:"print(\"Я вчу\", \"Python\")\nprint(\"Мені\", 13, \"років\")"},
+ class_object:{topic:"клас і об’єкт",
+  text:["Клас — це шаблон (креслення): він описує, яким буде щось. Об’єкт — конкретна річ, створена за цим шаблоном.","Клас пишемо так: class Назва: і з відступом pass, якщо всередині поки нічого немає. Об’єкт створюємо, записавши назву класу з дужками.","isinstance(об’єкт, Клас) відповідає True, якщо об’єкт створено з цього класу."],
+  example:"class Bird:\n    pass\n\nkesha = Bird()      # об’єкт класу Bird\nprint(\"Птах створений\")"},
+ class_attr:{topic:"атрибут класу",
+  text:["Атрибут — це змінна, яка живе всередині класу.","Звернутися до нього можна через крапку: Клас.атрибут."],
+  example:"class Car:\n    color = \"червоний\"\n\nprint(Car.color)"},
+ object_attr:{topic:"атрибути об’єкта",
+  text:["Кожен об’єкт може мати свої значення атрибутів. Задати їх можна через крапку: об’єкт.атрибут = значення.","У print() кілька значень пишемо через кому."],
+  example:"class Car:\n    pass\n\nc = Car()\nc.color = \"синій\"\nc.year = 2015\nprint(c.color, c.year)"},
+ two_objects:{topic:"один клас, багато об’єктів",
+  text:["За одним класом можна створити багато об’єктів.","Їхні атрибути незалежні: змінюємо один об’єкт — інший не чіпаємо."],
+  example:"class Car:\n    pass\n\nx = Car()\ny = Car()\nx.color = \"білий\"\ny.color = \"чорний\"\nprint(x.color, y.color)"},
+ method:{topic:"метод класу",
+  text:["Метод — це функція всередині класу. Його перший параметр завжди self — це сам об’єкт.","Викликаємо метод через крапку: об’єкт.метод()."],
+  example:"class Cat:\n    def speak(self):\n        print(\"Няв!\")\n\nc = Cat()\nc.speak()"},
  count_vowels:{topic:"цикл for і рядки",
   text:["Рядок — це послідовність символів. Цикл for бере їх по одному.","Умова if перевіряє символ. Наприклад, \"a\" in \"aeiou\" дає True, бо літера є в рядку.","Щоб не залежати від великих літер, скористайся методом .lower()."],
   example:"def count_a(s):\n    n = 0\n    for c in s:\n        if c == \"a\":\n            n += 1\n    return n"},
@@ -280,8 +379,8 @@ const LESSONS={
   example:"n = 7\nok = True\nfor d in range(2, n):\n    if n % d == 0:\n        ok = False\nprint(ok)   # True: 7 просте"}
 };
 
-const PY=`
-import sys, io, json, tokenize
+const PY=String.raw`
+import sys, io, json, tokenize, ast, math, types
 # Ці типи токенів не рахуємо: переноси рядків, відступи, коментарі та кінець файлу.
 SKIP={tokenize.NEWLINE,tokenize.NL,tokenize.INDENT,tokenize.DEDENT,tokenize.COMMENT,tokenize.ENDMARKER}
 # Максимум кроків. Якщо код їх перевищив, зупиняємо його (захист від нескінченного циклу).
@@ -295,6 +394,461 @@ def live(src):
     except Exception: return -1
 # Наша помилка «код працює занадто довго».
 class Limit(Exception): pass
+
+# Лічильник кроків: Python викликає цю функцію на кожному рядку коду учня.
+def make_tracer(n):
+    def tr(frame, ev, arg):
+        if frame.f_code.co_filename!='<user>': return None
+        if ev=='line':
+            n[0]+=1
+            if n[0]>LIMIT: raise Limit('Код виконується занадто довго. Перевір цикли.')
+        return tr
+    return tr
+
+# ---------- Власна спрощена версія turtle ----------
+# Справжній turtle потребує вікна, а в браузері його немає. Тому ми підміняємо модуль turtle своїм:
+# він не малює, а записує лінії, точки й заливки. Потім сторінка перетворює записане на малюнок.
+class _Canvas:
+    def __init__(self):
+        self.segs=[]; self.dots=[]; self.fills=[]; self.texts=[]; self.turtles=[]; self.bg='white'
+    def export(self):
+        return {'segs':self.segs,'dots':self.dots,'fills':self.fills,'texts':self.texts,
+                'turtles':[t.state() for t in self.turtles],'bg':self.bg}
+
+# Перетворює колір на текст: "Red" -> "red", (1, 0, 0) -> "#ff0000"
+def _col(c, *rest):
+    if rest: c=(c,)+rest
+    if isinstance(c,(tuple,list)):
+        v=[float(x) for x in c]
+        if max(v)<=1: v=[x*255 for x in v]
+        return '#%02x%02x%02x'%tuple(int(round(x)) for x in v)
+    return str(c).lower()
+
+def build_turtle(cv):
+    class Turtle:
+        def __init__(self,*a,**k):
+            self.x=0.0; self.y=0.0; self.h=0.0      # положення і напрям (0 градусів — вправо)
+            self._pd=True; self.pc='black'; self.fc='black'; self.w=1; self.vis=True; self._fill=None
+            cv.turtles.append(self)
+        def state(self):
+            return {'x':round(self.x,3),'y':round(self.y,3),'heading':round(self.h%360,3),'visible':self.vis}
+        def _move(self,nx,ny):
+            if self._pd:
+                cv.segs.append([round(self.x,3),round(self.y,3),round(nx,3),round(ny,3),self.pc,self.w])
+            self.x,self.y=nx,ny
+            if self._fill is not None: self._fill.append([round(nx,3),round(ny,3)])
+        def forward(self,d):
+            r=math.radians(self.h)
+            self._move(self.x+d*math.cos(r),self.y+d*math.sin(r))
+        def backward(self,d): self.forward(-d)
+        def left(self,a): self.h=(self.h+a)%360
+        def right(self,a): self.h=(self.h-a)%360
+        def goto(self,x,y=None):
+            if y is None: x,y=x
+            self._move(float(x),float(y))
+        def setx(self,x): self.goto(x,self.y)
+        def sety(self,y): self.goto(self.x,y)
+        def setheading(self,a): self.h=a%360
+        def home(self):
+            self.goto(0,0); self.h=0.0
+        def penup(self): self._pd=False
+        def pendown(self): self._pd=True
+        def isdown(self): return self._pd
+        def pensize(self,w=None):
+            if w is None: return self.w
+            self.w=w
+        def color(self,*a):
+            if not a: return (self.pc,self.fc)
+            if len(a)==2: self.pc,self.fc=_col(a[0]),_col(a[1])
+            else: self.pc=self.fc=_col(*a)
+        def pencolor(self,*a):
+            if not a: return self.pc
+            self.pc=_col(*a)
+        def fillcolor(self,*a):
+            if not a: return self.fc
+            self.fc=_col(*a)
+        def begin_fill(self): self._fill=[[round(self.x,3),round(self.y,3)]]
+        def end_fill(self):
+            if self._fill and len(self._fill)>2: cv.fills.append({'pts':self._fill,'color':self.fc})
+            self._fill=None
+        def circle(self,r,extent=360,steps=None):
+            # Коло наближаємо багатокутником із багатьма сторонами
+            n=steps or max(8,int(abs(extent)/6))
+            a=extent/n
+            ch=2*abs(r)*math.sin(math.radians(abs(a))/2)
+            s=1 if r>0 else -1
+            self.left(s*a/2)
+            for _ in range(n):
+                self.forward(ch); self.left(s*a)
+            self.right(s*a/2)
+        def dot(self,size=None,*c):
+            cv.dots.append([round(self.x,3),round(self.y,3),size or max(self.w+4,2*self.w),_col(*c) if c else self.pc])
+        def write(self,text,*a,**k): cv.texts.append([round(self.x,3),round(self.y,3),str(text)])
+        def hideturtle(self): self.vis=False
+        def showturtle(self): self.vis=True
+        def xcor(self): return self.x
+        def ycor(self): return self.y
+        def pos(self): return (self.x,self.y)
+        def heading(self): return self.h
+        def speed(self,*a): return 0
+        def shape(self,*a): pass
+        def shapesize(self,*a): pass
+        def clear(self): cv.segs.clear(); cv.dots.clear(); cv.fills.clear(); cv.texts.clear()
+        def reset(self):
+            self.clear(); self.home()
+        # Короткі назви тих самих команд
+        fd=forward; bk=back=backward; lt=left; rt=right
+        setpos=setposition=goto; seth=setheading
+        pu=up=penup; pd=down=pendown; width=pensize
+        ht=hideturtle; st=showturtle; position=pos
+    class Screen:
+        def bgcolor(self,*a):
+            if a: cv.bg=_col(*a)
+        def __getattr__(self,name):
+            # title, setup, tracer, mainloop, exitonclick, onclick тощо: нічого не роблять
+            return lambda *a,**k: None
+        done=lambda self,*a,**k: None
+    mod=types.ModuleType('turtle')
+    mod.Turtle=Turtle; mod.Pen=Turtle; mod.RawTurtle=Turtle; mod.Screen=Screen
+    holder=[None]
+    def default():
+        if holder[0] is None: holder[0]=Turtle()
+        return holder[0]
+    for nm in ['forward','fd','backward','back','bk','left','lt','right','rt','goto','setpos','setposition','setx','sety',
+               'setheading','seth','home','penup','pu','up','pendown','pd','down','pensize','width','color','pencolor',
+               'fillcolor','begin_fill','end_fill','circle','dot','write','hideturtle','ht','showturtle','st','speed',
+               'xcor','ycor','pos','position','heading','isdown','shape','shapesize','clear','reset']:
+        setattr(mod,nm,(lambda nm: lambda *a,**k: getattr(default(),nm)(*a,**k))(nm))
+    for nm in ['mainloop','done','exitonclick','bgcolor','title','setup','tracer','update','listen','onclick','onkey','onkeypress']:
+        setattr(mod,nm,(lambda nm: lambda *a,**k: getattr(Screen(),nm)(*a,**k))(nm))
+    return mod
+
+# Перевірка малюнка черепашки за описом завдання (t): правильний багатокутник, кольори, кількість ліній
+def turtle_rows(draw,t):
+    rows=[]
+    segs=draw['segs'] if draw else []
+    if draw is None:
+        return [[False,'Не знайдено малюнка. Підключи turtle (import turtle) і створи черепашку.']]
+    ang=lambda s: math.degrees(math.atan2(s[3]-s[1],s[2]-s[0]))
+    if 'poly' in t:
+        n=t['poly']['n']; side=t['poly']['side']
+        ok=len(segs)==n
+        if ok:
+            turns=[]
+            for i in range(n):
+                a,b=segs[i],segs[(i+1)%n]
+                if abs(math.hypot(a[2]-a[0],a[3]-a[1])-side)>1: ok=False
+                if abs(a[2]-b[0])>0.5 or abs(a[3]-b[1])>0.5: ok=False
+                turns.append((ang(b)-ang(a))%360)
+            full=360/n
+            if not (all(abs(x-full)<1 for x in turns) or all(abs(x-(360-full))<1 for x in turns)): ok=False
+        text='правильний {}-кутник зі стороною {}'.format(n,side)
+        rows.append([ok,('Намальовано '+text) if ok else ('Потрібно намалювати '+text+'. Зараз ліній: '+str(len(segs)))])
+    if 'circle' in t:
+        r=t['circle']['r']
+        xs=[v for s in segs for v in (s[0],s[2])]; ys=[v for s in segs for v in (s[1],s[3])]
+        ok=bool(segs) and abs((max(xs)-min(xs))-2*r)<3 and abs((max(ys)-min(ys))-2*r)<3
+        rows.append([ok,('Намальовано коло радіуса '+str(r)) if ok else ('Потрібно намалювати коло радіуса '+str(r))])
+    for c in t.get('colors',[]):
+        ok=any(s[4]==c for s in segs)
+        rows.append([ok,('Є лінії кольору '+c) if ok else ('Немає ліній кольору '+c)])
+    for c in t.get('fills',[]):
+        ok=any(f['color']==c for f in draw['fills'])
+        rows.append([ok,('Є заливка кольору '+c) if ok else ('Немає заливки кольору '+c+' (begin_fill і end_fill)')])
+    if 'lines' in t:
+        ok=len(segs)>=t['lines']
+        rows.append([ok,('Ліній достатньо: '+str(len(segs))) if ok else ('Ліній замало: '+str(len(segs))+' з '+str(t['lines']))])
+    return rows
+
+# ---------- Власна спрощена версія tkinter ----------
+# Справжнє вікно в браузері не відкрити. Тому підміняємо модуль tkinter своїм: він запам'ятовує,
+# які віджети створено і як вони розміщені. Сторінка малює з цього «вікно», а кнопки в ньому
+# працюють: натискання повертається сюди й запускає функцію учня.
+_TK=[None]      # остання запущена програма (щоб кнопки в попередньому перегляді працювали)
+
+class _TkApp:
+    def __init__(self):
+        self.root=None; self.widgets=[]; self.n=0; self.title='tk'; self.geom=''; self.printed=[]; self.alerts=[]
+    def export(self):
+        ws=[]
+        for w in self.widgets:
+            if w.dead: continue
+            o=w.opts
+            keep={k:o[k] for k in ('width','height','bg','background','fg','foreground','font','state') if k in o}
+            ws.append({'id':w.id,'kind':w.kind,'parent':w.master.id if w.master is not None else None,
+                       'text':w.text(),'layout':w.layout,'cmd':callable(o.get('command')),'opts':keep})
+        return {'title':self.title,'geom':self.geom,'widgets':ws,'printed':self.printed,'alerts':self.alerts}
+
+def _ix(i,cur):
+    # Позиція в Entry: число або 'end'
+    return len(cur) if i=='end' else int(i)
+
+def build_tkinter(app):
+    class Var:
+        _default=''
+        def __init__(self,master=None,value=None,name=None):
+            self.v=self._default if value is None else value
+        def get(self): return self.v
+        def set(self,x): self.v=x
+        def trace_add(self,*a,**k): pass
+    class StringVar(Var): _default=''
+    class IntVar(Var): _default=0
+    class DoubleVar(Var): _default=0.0
+    class BooleanVar(Var): _default=False
+
+    class Widget:
+        kind='Widget'
+        def __init__(self,master=None,**opts):
+            app.n+=1; self.id=app.n; self.dead=False; self.layout=None; self.opts=dict(opts); self.value=''
+            if master is None and self.kind!='Tk':
+                master=app.root if app.root is not None else Tk()
+            self.master=master
+            app.widgets.append(self)
+        def text(self):
+            v=self.opts.get('textvariable')
+            if v is not None: return str(v.get())
+            if self.kind=='Entry': return str(self.value)
+            return str(self.opts.get('text',''))
+        # Способи розмістити віджет у вікні. Без одного з них віджет не буде видно!
+        def pack(self,**kw): self.layout=['pack',kw]
+        def grid(self,**kw): self.layout=['grid',kw]
+        def place(self,**kw): self.layout=['place',kw]
+        def pack_forget(self): self.layout=None
+        grid_forget=place_forget=pack_forget
+        def configure(self,**kw): self.opts.update(kw)
+        config=configure
+        def cget(self,k): return self.opts.get(k)
+        def __setitem__(self,k,v): self.opts[k]=v
+        def __getitem__(self,k): return self.opts.get(k)
+        def destroy(self): self.dead=True
+        def bind(self,*a,**k): pass
+        def focus_set(self,*a): pass
+        focus=focus_set
+
+    class Tk(Widget):
+        kind='Tk'
+        def __init__(self,*a,**k):
+            Widget.__init__(self,None)
+            app.root=self
+        def title(self,t=None):
+            if t is None: return app.title
+            app.title=str(t)
+        wm_title=title
+        def geometry(self,g=None):
+            if g is not None: app.geom=str(g)
+        def mainloop(self,*a): pass
+        def quit(self): pass
+        def __getattr__(self,n):
+            if n in ('resizable','minsize','maxsize','iconbitmap','protocol','update','update_idletasks','attributes','option_add','after','withdraw','deiconify'):
+                return lambda *a,**k: None
+            raise AttributeError(n)
+
+    class Frame(Widget): kind='Frame'
+    class Label(Widget): kind='Label'
+    class Button(Widget):
+        kind='Button'
+        def invoke(self):
+            c=self.opts.get('command')
+            if callable(c): return c()
+    class Entry(Widget):
+        kind='Entry'
+        def get(self):
+            v=self.opts.get('textvariable')
+            return str(v.get()) if v is not None else self.value
+        def _set(self,t):
+            v=self.opts.get('textvariable')
+            if v is not None: v.set(t)
+            else: self.value=t
+        def insert(self,i,s):
+            cur=self.get(); i=_ix(i,cur)
+            self._set(cur[:i]+str(s)+cur[i:])
+        def delete(self,a,b=None):
+            cur=self.get(); a=_ix(a,cur)
+            b=a+1 if b is None else _ix(b,cur)
+            self._set(cur[:a]+cur[b:])
+
+    # messagebox: повідомлення не відкриваються окремо, а записуються і показуються під вікном
+    mb=types.ModuleType('tkinter.messagebox')
+    def _alert(kind):
+        def f(title=None,message=None,**k):
+            app.alerts.append([kind,str(title),str(message)])
+            return True
+        return f
+    for nm in ('showinfo','showwarning','showerror','askyesno','askokcancel'):
+        setattr(mb,nm,_alert(nm))
+
+    mod=types.ModuleType('tkinter'); mod.__path__=[]
+    for c in (Tk,Frame,Label,Button,Entry,StringVar,IntVar,DoubleVar,BooleanVar):
+        setattr(mod,c.__name__,c)
+    mod.messagebox=mb
+    mod.mainloop=lambda n=0: None       # для from tkinter import * та mainloop()
+    for k,v in dict(LEFT='left',RIGHT='right',TOP='top',BOTTOM='bottom',BOTH='both',X='x',Y='y',END='end',
+                    N='n',S='s',E='e',W='w',NW='nw',NE='ne',SW='sw',SE='se',NSEW='nsew',CENTER='center',
+                    NORMAL='normal',DISABLED='disabled').items():
+        setattr(mod,k,v)
+    return mod,mb
+
+def tk_install(app):
+    mod,mb=build_tkinter(app)
+    sys.modules['tkinter']=mod; sys.modules['tkinter.messagebox']=mb
+def tk_uninstall():
+    sys.modules.pop('tkinter',None); sys.modules.pop('tkinter.messagebox',None)
+
+# Запускає функцію тихо (без виводу), із захистом від нескінченних циклів
+def tk_quiet(f):
+    old=sys.stdout; n=[0]
+    try:
+        sys.stdout=io.StringIO(); sys.settrace(make_tracer(n)); f()
+    except BaseException: pass
+    finally:
+        sys.settrace(None); sys.stdout=old
+
+# Запускає код учня ще раз у «чистому» вікні, щоб перевірити, що буде після натискань
+def tk_fresh(code):
+    a=_TkApp(); tk_install(a)
+    tk_quiet(lambda: exec(code,{'__name__':'__main__'}))
+    tk_uninstall()
+    return a
+
+def tk_find(app,req):
+    for w in app.widgets:
+        if w.dead or w.kind!=req['type']: continue
+        if 'text' in req and w.text()!=req['text']: continue
+        return w
+    return None
+
+def tk_do(a,act):
+    if 'click' in act:
+        w=tk_find(a,{'type':'Button','text':act['click']})
+        if w is not None and callable(w.opts.get('command')): tk_quiet(w.opts['command'])
+    elif 'entry' in act:
+        es=[w for w in a.widgets if not w.dead and w.kind=='Entry']
+        if act['entry']<len(es): es[act['entry']]._set(act['text'])
+
+# Перевірка вікна за описом завдання (t): заголовок, потрібні віджети, дії та їх наслідки
+def tk_rows(app,t,code):
+    rows=[]
+    def need(a,req):
+        name=req['type']+((' з текстом «'+req['text']+'»') if 'text' in req else '')
+        w=tk_find(a,req)
+        if w is None: return [False,'Немає віджета '+name]
+        if w.layout is None: return [False,name+' створено, але не розміщено у вікні: додай .pack()']
+        return [True,'Є '+name]
+    if app.root is None:
+        return [[False,'Не знайдено вікна. Створи його командою Tk() і запусти mainloop().']]
+    if 'title' in t:
+        ok=app.title==t['title']
+        rows.append([ok,('Заголовок вікна: «'+t['title']+'»') if ok else ('Заголовок вікна має бути «'+t['title']+'», зараз «'+app.title+'»')])
+    for req in t.get('widgets',[]): rows.append(need(app,req))
+    for run in t.get('runs',[]):
+        a2=tk_fresh(code)
+        for act in run.get('actions',[]): tk_do(a2,act)
+        for req in run.get('after',[]):
+            r=need(a2,req)
+            r[1]=('Після дій: ' if r[0] else 'Після дій: ')+r[1]
+            if not r[0]:
+                r[1]+='. Зараз написи: '+(', '.join('«'+w.text()+'»' for w in a2.widgets if not w.dead and w.kind=='Label') or 'немає')
+            rows.append(r)
+    return rows
+
+# Викликається зі сторінки, коли в попередньому перегляді натиснули кнопку
+def tk_click(wid):
+    app=_TK[0]
+    if app is None: return json.dumps({'title':'','widgets':[],'printed':[],'alerts':[]})
+    w=next((x for x in app.widgets if x.id==wid),None)
+    buf=io.StringIO(); old=sys.stdout; n=[0]; err=None
+    try:
+        sys.stdout=buf; sys.settrace(make_tracer(n))
+        cmd=w.opts.get('command') if w is not None else None
+        if callable(cmd): cmd()
+    except BaseException as e:
+        err=type(e).__name__+': '+str(e)
+    finally:
+        sys.settrace(None); sys.stdout=old
+    app.printed.extend([l for l in buf.getvalue().split('\n') if l])
+    d=app.export(); d['error']=err
+    return json.dumps(d,default=str)
+
+# Викликається зі сторінки, коли в полі вводу щось набрали
+def tk_input(wid,val):
+    app=_TK[0]
+    if app is None: return
+    w=next((x for x in app.widgets if x.id==wid),None)
+    if w is not None and w.kind=='Entry': w._set(val)
+
+# Перевірка задач на print і класи: запускаємо весь код учня, збираємо те, що він вивів,
+# і дивимось, чи створено потрібні класи, об'єкти та атрибути.
+def check_print(src, spec_json):
+    spec=json.loads(spec_json)
+    out={'tokens':None,'rows':[],'steps':None,'error':None}
+    n=[0]
+    buf=io.StringIO()
+    cv=_Canvas()
+    app=_TkApp()
+    old=sys.stdout
+    g={'__name__':'__main__'}
+    try:
+        try:
+            code=compile(src,'<user>','exec')
+        except SyntaxError as e:
+            out['syntax']=True
+            out['error']='Синтаксична помилка у рядку '+str(e.lineno)+' ('+str(e.msg)+'). Перевір дужки, двокрапки та відступи. Ця спроба не рахується.'
+            return json.dumps(out)
+        out['tokens']=count_tokens(src)
+        sys.modules['turtle']=build_turtle(cv)     # підміняємо turtle нашою версією
+        tk_install(app)                            # і tkinter теж
+        sys.stdout=buf
+        sys.settrace(make_tracer(n))
+        exec(code,g)
+    except BaseException as e:
+        out['error']=type(e).__name__+': '+str(e)
+    finally:
+        sys.settrace(None)
+        sys.stdout=old
+        sys.modules.pop('turtle',None)
+        tk_uninstall()
+    if cv.turtles: out['draw']=cv.export()      # малюнок показуємо навіть якщо є помилка
+    if app.root is not None:
+        out['tk']=app.export(); _TK[0]=app       # вікно tkinter для попереднього перегляду
+    if out['error']:
+        return json.dumps(out)
+    out['steps']=n[0]
+    # Чи створено потрібні класи
+    for name in spec.get('needs',[]):
+        ok=isinstance(g.get(name),type)
+        out['rows'].append([ok,('Є клас ' if ok else 'Немає класу ')+name])
+    # Чи змінні є об'єктами потрібного класу
+    for var,cls in spec.get('inst',{}).items():
+        c=g.get(cls)
+        ok=isinstance(c,type) and isinstance(g.get(var),c)
+        out['rows'].append([ok,var+(' — об’єкт класу ' if ok else ' має бути об’єктом класу ')+cls])
+    # Чи є потрібні атрибути та методи
+    for name,attrs in spec.get('has',{}).items():
+        for a in attrs:
+            ok=name in g and hasattr(g[name],a)
+            out['rows'].append([ok,('У '+name+' є '+a) if ok else ('У '+name+' немає '+a)])
+    # Чи використано потрібні конструкції (цикл, функцію, клас, match/case тощо)
+    try: names={type(nd).__name__ for nd in ast.walk(ast.parse(src))}
+    except Exception: names=set()
+    LABEL={'For':'цикл for','While':'цикл while','FunctionDef':'функція (def)','ClassDef':'клас (class)','Match':'match/case','If':'умова if','Import':'підключення модуля (import)','Lambda':'lambda'}
+    for u in spec.get('uses',[]):
+        ok=(u in names) or (u=='Import' and 'ImportFrom' in names)
+        out['rows'].append([ok,('Використано: ' if ok else 'Потрібно використати: ')+LABEL.get(u,u)])
+    # Перевірка малюнка черепашки
+    if spec.get('turtle') is not None:
+        out['rows'].extend(turtle_rows(out.get('draw'),spec['turtle']))
+    # Перевірка вікна tkinter
+    if spec.get('tk') is not None:
+        out['rows'].extend(tk_rows(app,spec['tk'],code))
+    # Порівнюємо вивід, ігноруючи зайві пропуски в кінці рядків і порожні рядки в кінці
+    if spec.get('expect') is not None:
+        norm=lambda t:'\n'.join(l.rstrip() for l in t.strip('\n').split('\n'))
+        show=lambda t:t.strip('\n').replace('\n',' ⏎ ')
+        got=buf.getvalue()
+        ok=norm(got)==norm(spec['expect'])
+        out['rows'].append([ok,('Вивід правильний: '+show(got)) if ok else ('Вивід не збігається. Очікувалось: «'+show(spec['expect'])+'», твій код вивів: «'+show(got)+'»')])
+    return json.dumps(out,default=str)
+
 # Головна функція: запускає код учня, прогоняє тести й повертає результат у форматі JSON.
 def check(src, fname, tests, big):
     out={'tokens':None,'rows':[],'steps':None,'error':None}
@@ -335,7 +889,7 @@ def check(src, fname, tests, big):
     # Наглядача обов'язково вимикаємо.
     finally:
         sys.settrace(None)
-    return json.dumps(out)
+    return json.dumps(out,default=str)
 `;
 
 // Скорочення: $("tok") замість довгого document.getElementById("tok").
@@ -351,25 +905,34 @@ function kyivDate(){
 const KD=kyivDate(), KP=KD.split("-").map(Number);   // KD — рядок «2026-10-01»
 const d=new Date(Date.UTC(KP[0],KP[1]-1,KP[2]));      // київська дата як «північ за UTC»
 const day=Math.floor(d.getTime()/864e5);
-const num=Math.max(1,day-Math.floor(Date.UTC(2026,8,30)/864e5)+1);
-const dailyTask=TASKS[((day%TASKS.length)+TASKS.length)%TASKS.length];
+// Нова задача з'являється кожні 3 дні. Періоди рахуються від 2026-10-01 (так само, як у базі даних).
+// Щоб змінити початок або довжину періоду, змінюй ANCHOR_DAY / PERIOD_DAYS тут і дату у функції period_key() в SQL.
+const ANCHOR_DAY=Math.floor(Date.UTC(2026,9,1)/864e5);
+const PERIOD_DAYS=3;
+const pIdx=Math.floor((day-ANCHOR_DAY)/PERIOD_DAYS);                    // номер періоду
+const pStart=new Date((ANCHOR_DAY+pIdx*PERIOD_DAYS)*864e5);             // перший день періоду
+const pEnd=new Date((ANCHOR_DAY+pIdx*PERIOD_DAYS+PERIOD_DAYS-1)*864e5); // останній день періоду
+const PERIOD_KEY=pStart.toISOString().slice(0,10);                     // ключ періоду, наприклад «2026-10-01»
+const num=Math.max(1,pIdx+1);                                           // номер задачі
+const dailyTask=TASKS[((pIdx%TASKS.length)+TASKS.length)%TASKS.length];
+const shortDate=x=>x.toLocaleDateString("uk-UA",{day:"numeric",month:"long",timeZone:"UTC"});
 // mode — поточний режим ("daily", "practice" або "rush"), task — поточна задача.
 let task=dailyTask, mode="daily";
 // Ключ, під яким рекорд дня зберігається в браузері (localStorage).
-const key="pyday:"+day;
+const key="pyday:"+pIdx;
 // py — доступ до Python (з'явиться, коли робітник завантажить Python), last — останній успішний результат.
 let py=null, last=null;
 
 // Практика: дані зберігаємо в браузері. drafts — чернетки коду для кожної задачі.
 const PK="pyday-practice", drafts={};
-TASKS.forEach(t=>{const o=document.createElement("option");o.textContent=t.title;$("pick").append(o)});
+PRACT.forEach((t,i)=>{const o=document.createElement("option");o.textContent=(i>=TASKS.length?"★ ":"")+t.title;$("pick").append(o)});
 // Читаємо збережені дані практики (спроби та дні тренувань). try/catch потрібен, щоб сторінка не ламалась, якщо збереження недоступне.
 function pdata(){try{return JSON.parse(localStorage.getItem(PK))||{attempts:{},days:[]}}catch(e){return {attempts:{},days:[]}}}
-function pcount(){return pdata().attempts[task.fn]||0}
+function pcount(){return pdata().attempts[task.id]||0}
 // Додаємо одну спробу до задачі й позначаємо, що сьогодні тренувався.
 function pRecord(){
   const p=pdata();
-  p.attempts[task.fn]=(p.attempts[task.fn]||0)+1;
+  p.attempts[task.id]=(p.attempts[task.id]||0)+1;
   if(!p.days.includes(day))p.days.push(day);
   try{localStorage.setItem(PK,JSON.stringify(p))}catch(e){}
   practiceToDb();
@@ -389,12 +952,12 @@ const RKEY="pyday-rush";
 let rushSummary=null;
 
 // Ключ чернетки: у практиці — своя на кожну задачу
-function curKey(){return mode==="practice"?task.fn:mode==="rush"?"rush":"daily"}
+function curKey(){return mode==="practice"?task.id:mode==="rush"?"rush":"daily"}
 
 // Список у випадному меню залежить від режиму: задачі (практика) або рівні (марафон)
 function fillPick(){
   $("pick").textContent="";
-  const list=mode==="rush"?RUSH.map(t=>t.name):TASKS.map(t=>t.title);
+  const list=mode==="rush"?RUSH.map(t=>t.name):PRACT.map((t,i)=>(i>=TASKS.length?"★ ":"")+t.title);
   list.forEach(n=>{const o=document.createElement("option");o.textContent=n;$("pick").append(o)});
 }
 
@@ -456,13 +1019,13 @@ function render(){
   const p=mode==="practice", r=mode==="rush";
   if(r)rush.tier=Math.max(0,$("pick").selectedIndex);
   const idle=r&&!rush.running;
-  $("meta").textContent=p?"Практика · без рейтингу":r?"Марафон · від легкого до складного":d.toLocaleDateString("uk-UA",{day:"numeric",month:"long",timeZone:"UTC"})+" · задача №"+num;
+  $("meta").textContent=p?"Практика · без рейтингу":r?"Марафон · від легкого до складного":shortDate(pStart)+" – "+shortDate(pEnd)+" · задача №"+num;
   $("title").textContent=task.title;
   $("text").textContent=task.text;
   $("sig").textContent="def "+task.fn+"("+task.params+"):";
   $("sig").parentElement.hidden=!task.fn;
   renderLesson();
-  const starter="def "+task.fn+"("+task.params+"):\n    ";
+  const starter=task.start!==undefined?task.start:"def "+task.fn+"("+task.params+"):\n    ";
   $("code").value=idle?"":(r||drafts[curKey()]===undefined?starter:drafts[curKey()]);
   $("code").disabled=idle;
   $("run").disabled=!py||idle;
@@ -473,6 +1036,8 @@ function render(){
   ["daily","practice","rush"].forEach(m=>{$("tab"+m[0].toUpperCase()+m.slice(1)).className=m===mode?"":"ghost"});
   $("bestLbl").textContent=p?"спроб у цій задачі":r?"найкращий час":"твій рекорд (токени)";
   $("results").hidden=true;
+  $("drawBox").hidden=true;
+  $("tkBox").hidden=true;
   $("share").hidden=true;
   $("tok").textContent="–";
   $("steps").textContent="–";
@@ -496,7 +1061,7 @@ function setMode(m){
   mode=m;
   fillPick();
   if(m==="daily")task=dailyTask;
-  else if(m==="practice")task=TASKS[$("pick").selectedIndex];
+  else if(m==="practice")task=PRACT[$("pick").selectedIndex];
   else task=IDLE;
   render();
 }
@@ -507,7 +1072,7 @@ $("rushStart").addEventListener("click",startRush);
 $("pick").addEventListener("change",()=>{
   if(mode==="rush"){stopRush();task=IDLE;render();return}
   drafts[curKey()]=$("code").value;
-  task=TASKS[$("pick").selectedIndex];
+  task=PRACT[$("pick").selectedIndex];
   render();
 });
 
@@ -559,7 +1124,7 @@ function toast(msg){
 // Подія paste спрацьовує, коли щось вставляють у поле коду. У практиці вставки не позначаємо.
 $("code").addEventListener("paste",e=>{
   const text=(e.clipboardData||window.clipboardData).getData("text")||"";
-  if(mode==="practice"||!task.fn||text.length<PASTE_MIN)return;
+  if(mode==="practice"||!task.id||text.length<PASTE_MIN)return;
   pastes.push({time:new Date().toISOString(),length:text.length,text,mode});
   try{localStorage.setItem(pkey,JSON.stringify(pastes))}catch(err){}
   showPaste();
@@ -619,6 +1184,18 @@ function workerMain(){
     if(m.type==="live"){
       postMessage({id:m.id,value:pyodide.globals.get("live")(m.src)});
     }
+    // Кнопки й поля у вікні tkinter
+    if(m.type==="tkclick"){
+      postMessage({id:m.id,value:pyodide.globals.get("tk_click")(m.wid)});
+    }
+    if(m.type==="tkinput"){
+      pyodide.globals.get("tk_input")(m.wid,m.val);
+      postMessage({id:m.id,value:"ok"});
+    }
+    // Задачі на print і класи
+    if(m.type==="checkp"){
+      postMessage({id:m.id,value:pyodide.globals.get("check_print")(m.src,m.spec)});
+    }
     // Перевіряємо код: тести, токени, кроки
     if(m.type==="check"){
       postMessage({id:m.id,value:pyodide.globals.get("check")(m.src,m.fn,m.tests,m.big)});
@@ -671,8 +1248,20 @@ async function restartWorker(){
 // Ці два методи використовує решта сторінки
 const pyApi={
   async live(src){const m=await ask({type:"live",src:src});return m.value},
-  async check(src,fn,tests,big){
-    const m=await ask({type:"check",src:src,fn:fn,tests:tests,big:big},CHECK_TIMEOUT);
+  // Натискання кнопки у вікні tkinter. Повертає JSON з новим станом вікна (null, якщо програма зависла).
+  async tkClick(wid){
+    const m=await ask({type:"tkclick",wid:wid},CHECK_TIMEOUT);
+    if(m.timeout){await restartWorker();return null}
+    return m.value;
+  },
+  // Текст, який набрали в полі вводу
+  async tkInput(wid,val){await ask({type:"tkinput",wid:wid,val:val})},
+  // t — задача. Для задач на print і класи (є expect) шлемо одну перевірку, для функцій — іншу.
+  async check(src,t){
+    const msg=t.fn===undefined
+      ?{type:"checkp",src:src,spec:JSON.stringify({expect:t.expect,needs:t.needs||[],inst:t.inst||{},has:t.has||{},uses:t.uses||[],turtle:t.turtle||null,tk:t.tk||null})}
+      :{type:"check",src:src,fn:t.fn,tests:t.tests,big:t.big};
+    const m=await ask(msg,CHECK_TIMEOUT);
     if(m.timeout){
       await restartWorker();
       return JSON.stringify({tokens:null,rows:[],steps:null,error:"Час вийшов: код працює занадто довго. Перевір цикли."});
@@ -706,10 +1295,10 @@ $("run").addEventListener("click",async()=>{
   $("status").textContent="Перевіряю…";
   await new Promise(r=>setTimeout(r,30));
   // Надсилаємо код робітнику, чекаємо на відповідь і розбираємо її (JSON).
-  const res=JSON.parse(await py.check($("code").value,task.fn,task.tests,task.big));
+  const res=JSON.parse(await py.check($("code").value,task));
   // Щоденна задача: кожну спробу (крім помилок в написанні коду) списує сервер
   if(mode==="daily"&&me&&!res.syntax){
-    const u=await sb.rpc("use_attempt",{p_key:KD});
+    const u=await sb.rpc("use_attempt",{p_key:PERIOD_KEY});
     if(u.error){
       if(/no attempts/.test(u.error.message))attemptsLeft=0;
       $("status").textContent=attemptsLeft===0?"Спроби на сьогодні закінчилися.":"Не вдалося зв’язатися з базою. Спробуй ще раз.";
@@ -728,9 +1317,11 @@ $("run").addEventListener("click",async()=>{
     const row=document.createElement("div");row.className="row";
     const mark=document.createElement("span");mark.className=r[0]?"ok":"bad";mark.textContent=r[0]?"✓":"✗";
     const txt=document.createElement("span");txt.className="mono";
-    txt.textContent=task.fn+"("+r[1]+") → "+r[3]+(r[0]?"":"  (очікувалось "+r[2]+")");
+    txt.textContent=r.length===2?r[1]:task.fn+"("+r[1]+") → "+r[3]+(r[0]?"":"  (очікувалось "+r[2]+")");
     row.append(mark,txt);box.append(row);
   });
+  showDrawing(res.draw);
+  showTk(res.tk);
   if(res.tokens!==null)$("tok").textContent=res.tokens;
   // Три випадки: помилка в коді, усе пройдено, частина тестів не пройдена.
   if(res.error){
@@ -908,7 +1499,7 @@ function marathonKey(){return KD.slice(0,7)+":"+rush.tier}   // «місяць:�
 async function submitDaily(res){
   if(!me)return;
   const pasted=stillPasted();
-  const r=await sb.rpc("submit_result",{p_kind:"daily",p_key:KD,p_tokens:res.tokens,p_steps:res.steps,p_ms:null,p_pasted:pasted});
+  const r=await sb.rpc("submit_result",{p_kind:"daily",p_key:PERIOD_KEY,p_tokens:res.tokens,p_steps:res.steps,p_ms:null,p_pasted:pasted});
   if(r.error)toast("Результат не збережено: "+r.error.message);
   refreshBoard();
 }
@@ -929,7 +1520,7 @@ function practiceToDb(){
 function pasteToDb(text){
   if(!me)return;
   const kind=mode==="rush"?"marathon":"daily";
-  const key=kind==="daily"?KD:marathonKey();
+  const key=kind==="daily"?PERIOD_KEY:marathonKey();
   sb.from("paste_log").insert({user_id:me.id,kind:kind,task_key:key,length:text.length,body:text.slice(0,5000)}).then(()=>{});
 }
 
@@ -940,8 +1531,8 @@ async function refreshBoard(){
   const card=$("boardCard");
   if(!sb||!me||mode==="practice"){card.hidden=true;return}
   const kind=mode==="rush"?"marathon":"daily";
-  const key=kind==="daily"?KD:KD.slice(0,7)+":"+rush.tier;
-  $("boardTitle").textContent=kind==="daily"?"Рейтинг сьогодні":"Марафон · "+RUSH[rush.tier].name+" · цей місяць";
+  const key=kind==="daily"?PERIOD_KEY:KD.slice(0,7)+":"+rush.tier;
+  $("boardTitle").textContent=kind==="daily"?"Рейтинг цієї задачі":"Марафон · "+RUSH[rush.tier].name+" · цей місяць";
   card.hidden=false;
   const seq=++boardSeq;
   const r=await sb.rpc("board",{p_kind:kind,p_key:key});
@@ -1107,10 +1698,125 @@ async function openMyProfile(){
 }
 $("miProfile").addEventListener("click",()=>{toggleMenu(false);openMyProfile()});
 
+// ---------- Вікно tkinter ----------
+// Python повертає список віджетів (напис, кнопка, поле вводу, рамка) і те, як їх розміщено.
+// Тут з цього будуємо «вікно» зі справжніми кнопками та полями.
+async function tkClick(wid){
+  const v=await pyApi.tkClick(wid);
+  if(v===null){toast("Програма працює занадто довго.");return}
+  showTk(JSON.parse(v));
+}
+function showTk(d){
+  const box=$("tkBox");
+  if(!d){box.hidden=true;return}
+  box.hidden=false;
+  $("tkTitle").textContent=d.title||"tk";
+  const win=$("tkWin");
+  win.textContent="";
+  const kids={};
+  d.widgets.forEach(w=>{(kids[w.parent]=kids[w.parent]||[]).push(w)});
+
+  // Створює один віджет
+  function make(w){
+    let e;
+    if(w.kind==="Label"){e=el("div",w.text,"tk-label")}
+    else if(w.kind==="Button"){e=el("button",w.text,"tk-btn");e.addEventListener("click",()=>tkClick(w.id))}
+    else if(w.kind==="Entry"){
+      e=el("input");e.type="text";e.value=w.text||"";
+      e.addEventListener("input",()=>pyApi.tkInput(w.id,e.value));
+    }else{e=el("div",undefined,"tk-frame")}
+    const o=w.opts||{};
+    if(o.bg||o.background)e.style.background=o.bg||o.background;
+    if(o.fg||o.foreground)e.style.color=o.fg||o.foreground;
+    if(o.width&&w.kind!=="Frame")e.style.minWidth=(Number(o.width)*0.65)+"em";
+    return e;
+  }
+  // Розміщує дітей у контейнері за способом pack / grid / place
+  function build(parentId,box2){
+    const list=(kids[parentId]||[]).filter(w=>w.layout);       // віджет без pack/grid/place не видно
+    const first=list[0], kind=first?first.layout[0]:"pack";
+    if(kind==="grid"){box2.style.display="grid";box2.style.gap="4px";box2.style.justifyItems="start"}
+    else if(kind==="place"){box2.style.position="relative";box2.style.minHeight="140px"}
+    else{
+      const side=(first&&first.layout[1].side)||"top";
+      box2.style.display="flex";
+      box2.style.flexDirection=(side==="left"||side==="right")?"row":"column";
+      box2.style.alignItems=(side==="left"||side==="right")?"center":"flex-start";
+      box2.style.gap="4px";
+    }
+    list.forEach(w=>{
+      const e=make(w), L=w.layout[1]||{};
+      if(w.layout[0]==="grid"){
+        e.style.gridRow=(L.row||0)+1;e.style.gridColumn=(L.column||0)+1;
+        if(L.columnspan)e.style.gridColumn=((L.column||0)+1)+" / span "+L.columnspan;
+      }else if(w.layout[0]==="place"){
+        e.style.position="absolute";e.style.left=(L.x||0)+"px";e.style.top=(L.y||0)+"px";
+      }else if(L.fill==="x"||L.fill==="both"){e.style.alignSelf="stretch"}
+      if(L.padx!==undefined)e.style.marginInline=(Array.isArray(L.padx)?L.padx[0]:L.padx)+"px";
+      if(L.pady!==undefined)e.style.marginBlock=(Array.isArray(L.pady)?L.pady[0]:L.pady)+"px";
+      box2.append(e);
+      if(w.kind==="Frame")build(w.id,e);
+    });
+  }
+  const root=d.widgets.find(w=>w.kind==="Tk");
+  if(root)build(root.id,win);
+  // Вивід команд print та повідомлення messagebox показуємо під вікном
+  const lines=(d.printed||[]).concat((d.alerts||[]).map(a=>"Повідомлення «"+a[1]+"»: "+a[2]));
+  if(d.error)lines.push("Помилка: "+d.error);
+  $("tkOut").textContent=lines.join("\n");
+  $("tkOut").hidden=!lines.length;
+}
+
+// ---------- Малюнок черепашки ----------
+// Python повертає список ліній, точок і заливок. Тут ми малюємо їх на полотні (canvas).
+function showDrawing(d){
+  const box=$("drawBox");
+  if(!d){box.hidden=true;return}
+  box.hidden=false;
+  const cv=$("drawing"), g=cv.getContext("2d"), W=cv.width, H=cv.height;
+  // Межі малюнка. Мінімальне поле зору — щоб малі малюнки не роздувалися на весь екран.
+  let x0=-150,x1=150,y0=-120,y1=120;
+  const grow=(x,y)=>{x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)};
+  d.segs.forEach(s=>{grow(s[0],s[1]);grow(s[2],s[3])});
+  d.dots.forEach(p=>grow(p[0],p[1]));
+  d.fills.forEach(f=>f.pts.forEach(p=>grow(p[0],p[1])));
+  d.texts.forEach(p=>grow(p[0],p[1]));
+  d.turtles.forEach(t=>grow(t.x,t.y));
+  const pad=30, k=Math.min((W-2*pad)/(x1-x0),(H-2*pad)/(y1-y0));
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  const X=x=>W/2+(x-cx)*k, Y=y=>H/2-(y-cy)*k;      // y у turtle росте вгору, на екрані — вниз
+  g.fillStyle=d.bg||"white";
+  g.fillRect(0,0,W,H);
+  g.strokeStyle="#ccd6e2";g.lineWidth=1;            // осі координат
+  g.beginPath();g.moveTo(X(x0),Y(0));g.lineTo(X(x1),Y(0));g.moveTo(X(0),Y(y0));g.lineTo(X(0),Y(y1));g.stroke();
+  d.fills.forEach(f=>{
+    g.fillStyle=f.color;g.beginPath();
+    f.pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
+    g.closePath();g.fill();
+  });
+  g.lineCap="round";
+  d.segs.forEach(s=>{
+    g.strokeStyle=s[4];g.lineWidth=Math.max(2,s[5]*k);
+    g.beginPath();g.moveTo(X(s[0]),Y(s[1]));g.lineTo(X(s[2]),Y(s[3]));g.stroke();
+  });
+  d.dots.forEach(p=>{g.fillStyle=p[3];g.beginPath();g.arc(X(p[0]),Y(p[1]),Math.max(3,p[2]*k/2),0,7);g.fill()});
+  g.fillStyle="#1f3a5f";g.font="20px sans-serif";
+  d.texts.forEach(p=>g.fillText(p[2],X(p[0]),Y(p[1])));
+  // Черепашка: трикутник, що вказує в бік руху
+  d.turtles.forEach(t=>{
+    if(!t.visible)return;
+    const a=-t.heading*Math.PI/180, px=X(t.x), py=Y(t.y);
+    const pt=(u,v)=>[px+u*Math.cos(a)-v*Math.sin(a),py+u*Math.sin(a)+v*Math.cos(a)];
+    const A=pt(14,0),B=pt(-10,8),C=pt(-10,-8);
+    g.fillStyle="#2e7d5b";g.strokeStyle="#1f3a5f";g.lineWidth=2;
+    g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.lineTo(C[0],C[1]);g.closePath();g.fill();g.stroke();
+  });
+}
+
 // ---------- Урок над задачею ----------
 // Заповнює блок «Урок» для поточної задачі (якщо для неї є урок у LESSONS).
 function renderLesson(){
-  const L=LESSONS[task.fn];
+  const L=LESSONS[task.id];
   $("lesson").hidden=!L;
   if(!L)return;
   $("lessonTitle").textContent="Урок · "+L.topic;
@@ -1138,7 +1844,7 @@ function updateAttemptsUI(){
 }
 async function loadAttempts(){
   if(mode==="daily"&&me&&sb&&attemptsLeft===null){
-    const r=await sb.rpc("attempts_left",{p_key:KD});
+    const r=await sb.rpc("attempts_left",{p_key:PERIOD_KEY});
     if(!r.error)attemptsLeft=r.data;
   }
   updateAttemptsUI();
@@ -1169,9 +1875,9 @@ async function loadTeacher(){
   const q=await Promise.all([
     sb.from("classes").select("id,name,join_code").order("created_at"),
     sb.from("profiles").select("id,nick,display_name,class_id").eq("role","student").order("nick"),
-    sb.from("submissions").select("user_id,tokens,steps,pasted").eq("kind","daily").eq("task_key",KD),
+    sb.from("submissions").select("user_id,tokens,steps,pasted").eq("kind","daily").eq("task_key",PERIOD_KEY),
     sb.from("practice_days").select("user_id").eq("day",KD),
-    sb.from("attempts").select("user_id,used").eq("task_key",KD),
+    sb.from("attempts").select("user_id,used").eq("task_key",PERIOD_KEY).eq("day",KD),
     sb.from("paste_log").select("user_id,kind,task_key,length,body,created_at").order("created_at",{ascending:false}).limit(100)
   ]);
   const bad=q.find(x=>x.error);
@@ -1206,7 +1912,8 @@ async function loadTeacher(){
   // --- Учні класу ---
   const list=studs.filter(s=>s.class_id===T.classId);
   const c2=el("div",undefined,"card");
-  c2.append(el("h2","Учні · "+KD));
+  c2.append(el("h2","Учні · задача №"+num+" ("+shortDate(pStart)+" – "+shortDate(pEnd)+")"));
+  c2.append(el("p","Спроби показано за сьогодні ("+KD+"), практика теж за сьогодні.","mut"));
   const tbl=el("table");
   tbl.innerHTML="<tr><th>Учень</th><th>Результат</th><th>Спроби</th><th>Практика</th><th></th></tr>";
   list.forEach(s=>{
