@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codele — електронний клас з інформатики</title>
+<!-- Стилі винесено в css/style.css. Число після ?v= змінюй при кожному оновленні файлів, щоб браузер не показував старі. -->
+<link rel="stylesheet" href="css/style.css?v=20261007a">
+<!-- Бібліотека для роботи з базою Supabase (акаунти, завдання, тести). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<!-- РОЗМІТКА (HTML). Шапка, правила, вхід, вкладки, список завдань або сама задача, панель вчителя. -->
+<main>
+  <!-- Шапка: назва та меню. -->
+  <header class="top">
+    <h1>Codele</h1>
+    <nav class="menu">
+      <button id="menuBtn" class="ghost" aria-expanded="false" aria-controls="menuList">Меню</button>
+      <ul id="menuList" hidden>
+        <li><button id="miProfile">Профіль</button></li>
+        <li><button id="miTeacher" hidden>Панель вчителя</button></li>
+        <li><button id="miRules">Правила</button></li>
+        <li><button id="miLogout">Вийти</button></li>
+      </ul>
+    </nav>
+  </header>
+  <!-- Правила. Відкриваються з меню; текст можна змінювати прямо тут. -->
+  <dialog id="rulesDlg" aria-labelledby="rulesTitle">
+    <h2 id="rulesTitle">Правила Codele</h2>
+    <ul>
+      <li>Це твій електронний клас з інформатики: читай урок над завданням і розв’язуй. Спроб можна робити скільки завгодно.</li>
+      <li>Помилки в коді підсвічуються. Що більше невдалих спроб, то докладнішою стає підказка.</li>
+      <li>У темах і практиці в кожного учня трохи різні числа та слова в завданні. Так легше вчитися самому.</li>
+      <li>Вчитель бачить усі твої спроби й те, як змінювався код, а також вставлений код. Позначка «вставлено» може бути видима тобі лише на початку навчання, але вчитель бачить вставки завжди.</li>
+      <li>Марафон — це серія завдань по всіх темах від легких до складніших. Секундомір іде весь час, завдання можна пропустити.</li>
+      <li>Публічної таблиці лідерів немає. Оцінки ставить вчитель, а бачите їх ви обидва.</li>
+    </ul>
+    <button id="rulesClose">Закрити</button>
+  </dialog>
+  <!-- Вхід і реєстрація. Поки не увійшов, решту сторінки не показуємо. -->
+  <section id="auth" class="card" hidden>
+    <h2 id="authTitle">Вхід</h2>
+    <label>Нікнейм<input id="aNick" type="text" autocapitalize="off" autocomplete="username" placeholder="наприклад, kodo_kit"></label>
+    <label>Пароль<input id="aPass" type="password" autocomplete="current-password"></label>
+    <div id="regFields" hidden>
+      <label>Ім’я<input id="aName" type="text" autocomplete="name" placeholder="Як тебе звати"></label>
+      <label>Код класу<input id="aCode" type="text" autocapitalize="characters" placeholder="його дасть вчитель"></label>
+    </div>
+    <div class="bar"><button id="aGo">Увійти</button><button id="aSwitch" class="ghost">Зареєструватися</button></div>
+    <p id="aMsg" class="err" hidden></p>
+  </section>
+  <dialog id="meDlg"></dialog>
+  <dialog id="tDlg"></dialog>
+
+  <div id="appBody" hidden>
+    <!-- Вкладки: теми, практика, марафон, завдання від вчителя, тести. -->
+    <div class="tabs" id="tabs">
+      <button id="tab_topics">Теми</button>
+      <button id="tab_practice" class="ghost">Практика</button>
+      <button id="tab_marathon" class="ghost">Марафон</button>
+      <button id="tab_teacher" class="ghost">Від вчителя</button>
+      <button id="tab_tests" class="ghost">Тести</button>
+    </div>
+
+    <!-- Список: теми, практика, марафон або завдання від вчителя. -->
+    <div id="listView"><div id="listBody"></div></div>
+
+    <!-- Сторінка завдання: урок, умова, редактор, перевірка. -->
+    <div id="taskView" hidden>
+      <div class="bar"><button id="backBtn" class="ghost">← До списку</button><span id="crumb" class="mut"></span></div>
+      <section class="card">
+        <!-- Урок: тема і пояснення з прикладом. -->
+        <details id="lesson" class="lesson" open hidden>
+          <summary id="lessonTitle"></summary>
+          <div id="lessonBody"></div>
+        </details>
+        <h2 id="title"></h2>
+        <p id="text"></p>
+        <pre id="pseudo" hidden></pre>
+        <p>Напиши функцію: <code class="sig" id="sig"></code></p>
+      </section>
+
+      <!-- Поле для коду. Помилковий рядок підсвічується шаром #hl під текстом. -->
+      <div class="editor">
+        <pre id="hl" aria-hidden="true"></pre>
+        <textarea id="code" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Твій код"></textarea>
+      </div>
+      <div class="bar">
+        <button id="run" disabled>Запустити</button>
+        <button id="variantBtn" class="ghost" hidden>Інший варіант</button>
+        <button id="skipBtn" class="ghost" hidden>Пропустити</button>
+        <span class="badge" id="pasteBadge" hidden>📋 вставлено</span>
+        <span id="status">Завантажую Python…</span>
+      </div>
+      <section class="card hint" id="hintBox" hidden></section>
+      <section class="card stats" aria-live="polite">
+        <div class="stat"><b id="tok">–</b><span>токенів у коді</span></div>
+        <div class="stat"><b id="steps">–</b><span>кроків виконання</span></div>
+        <div class="stat"><b id="tries">0</b><span>запусків у цьому завданні</span></div>
+      </section>
+      <section class="card" id="results" hidden></section>
+      <!-- Вікно tkinter (показується, коли код його створює) -->
+      <section class="card" id="tkBox" hidden>
+        <h2>Вікно програми</h2>
+        <div class="tk-window"><div id="tkTitle" class="tk-title"></div><div id="tkWin" class="tk-body"></div></div>
+        <pre id="tkOut" hidden></pre>
+      </section>
+      <!-- Малюнок черепашки (показується, коли код використовує turtle) -->
+      <section class="card" id="drawBox" hidden>
+        <h2>Малюнок</h2>
+        <canvas id="drawing" width="640" height="480" aria-label="Малюнок черепашки" style="width:100%;max-width:360px;height:auto;border:1px solid var(--grid);border-radius:4px"></canvas>
+      </section>
+    </div>
+    <!-- Проходження тесту: питання без правильних відповідей, перевірка на сервері. -->
+    <div id="testView" hidden><section class="card" id="testBox"></section></div>
+    <div id="toast" role="status" hidden></div>
+  </div>
+
+  <!-- Панель вчителя: класи, учні, завдання, оцінки, кроки розв'язування. Доступна лише вчителю. -->
+  <section id="tPanel" hidden>
+    <div class="top"><h2 id="tTitle">Панель вчителя</h2><button id="tBack" class="ghost">← Назад</button></div>
+    <div id="tBody"></div>
+  </section>
+</main>
+
+
+<!-- Скрипти підключаються по порядку: дані, основа, Python у фоні, меню, акаунти, малюнки, тести, панель вчителя, старт. -->
+<script>const ASSET_V="20261007a";</script>
+<script src="js/data.js?v=20261007a"></script>
+<script src="js/core.js?v=20261007a"></script>
+<script src="js/worker.js?v=20261007a"></script>
+<script src="js/menu.js?v=20261007a"></script>
+<script src="js/auth.js?v=20261007a"></script>
+<script src="js/preview.js?v=20261007a"></script>
+<script src="js/tests.js?v=20261007a"></script>
+<script src="js/teacher.js?v=20261007a"></script>
+<script src="js/main.js?v=20261007a"></script>
+</body>
+</html>
