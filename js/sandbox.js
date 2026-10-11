@@ -7,8 +7,8 @@ const SANDBOX_MAX_STDIN=10000;
 const SANDBOX_MAX_OUTPUT=20000;
 
 function listSandbox(box){
-  const card=el("section",undefined,"card");
-  card.append(el("h2","Пісочниця Python"));
+  const card=el("details",undefined,"card");
+  card.append(el("summary","Пісочниця Python"));
   card.append(el("p","Пиши довільний код Python і запускай його без перевірки завдання. Рядки для input() введи нижче — по одному на рядок.","mut"));
   card.append(el("p","Код працює окремо від сторінки; запуск обмежено 5 секундами. Доступні стандартні бібліотеки Python, які підтримує Pyodide у браузері. Системні модулі й доступ до мережі недоступні.","mut"));
 
@@ -20,6 +20,27 @@ function listSandbox(box){
   code.setAttribute("aria-label","Код Python");
   code.value=sandboxCode;
   code.addEventListener("input",()=>{sandboxCode=code.value});
+
+  const copy=btn("Скопіювати код",async()=>{
+    try{
+      await navigator.clipboard.writeText(code.value);
+      toast("Код скопійовано.");
+    }catch(error){
+      code.focus();
+      code.select();
+      toast("Не вдалося скопіювати автоматично — код виділено для копіювання.");
+    }
+  },"ghost");
+  const download=btn("Завантажити .py",()=>{
+    const url=URL.createObjectURL(new Blob([code.value],{type:"text/x-python;charset=utf-8"}));
+    const link=el("a");
+    link.href=url;
+    link.download="codele.py";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },"ghost");
 
   const input=el("textarea");
   input.className="sandbox-input";
@@ -59,6 +80,9 @@ function listSandbox(box){
     }
   });
   card.append(el("label","Код Python"),code);
+  const codeActions=el("div",undefined,"bar");
+  codeActions.append(copy,download);
+  card.append(codeActions);
   card.append(el("label","Ввід для input() · по одному значенню на рядок"),input);
   card.append(run,el("h2","Результат"),output);
   box.append(card);
