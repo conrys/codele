@@ -185,6 +185,12 @@ async function openMyProfile(){
   const avg=grades.length?grades.reduce((a,g)=>a+g.score,0)/grades.length:null;
 
   dlg.textContent="";
+  if(dlg.dataset.backdropClose!=="true"){
+    dlg.addEventListener("click",event=>{
+      if(event.target===dlg)dlg.close();
+    });
+    dlg.dataset.backdropClose="true";
+  }
   // Шапка
   const head=el("div",undefined,"phead");
   head.append(el("div",me.role==="teacher"?"👨‍🏫":"🎓","avatar"));
@@ -213,14 +219,23 @@ async function openMyProfile(){
   // Медалі
   dlg.append(el("h2","Медалі"));
   const mg=el("div",undefined,"medals");
+  const medalDescription=el("p","Натисни на медаль, щоб побачити опис.","mut");
+  medalDescription.setAttribute("aria-live","polite");
   const visibleMedals=MEDALS.filter(m=>!m.secret||badges.includes(m));
   visibleMedals.forEach(m=>{
     const ok=badges.includes(m);
-    const b=el("div",undefined,"medal"+(ok?"":" locked"));
-    b.append(el("div",ok?m.ico:"🔒","ico"),el("b",m.name),el("span",m.desc));
+    const b=el("button",undefined,"medal medal-button"+(ok?"":" locked"));
+    b.type="button";
+    b.setAttribute("aria-label",(ok?"Отримано: ":"Ще не отримано: ")+m.name);
+    b.append(el("span",ok?m.ico:"🔒","ico"),el("b",m.name));
+    b.addEventListener("click",()=>{
+      medalDescription.textContent=(ok?"Отримано. ":"Ще не отримано. ")+m.desc;
+      mg.querySelectorAll(".medal-button").forEach(item=>item.classList.remove("selected"));
+      b.classList.add("selected");
+    });
     mg.append(b);
   });
-  dlg.append(mg,el("p","Отримано: "+badges.length+" з "+visibleMedals.length+". Медалі бачиш лише ти.","mut"));
+  dlg.append(mg,medalDescription,el("p","Отримано: "+badges.length+" з "+visibleMedals.length+". Медалі бачиш лише ти.","mut"));
   if(q[3].error)dlg.append(el("p","Не вдалося перевірити медаль за тест: "+q[3].error.message,"err"));
   dlg.append(el("h2","Нагороди від учителя"));
   if(q[4].error)dlg.append(el("p","Не вдалося завантажити нагороди: "+q[4].error.message,"err"));
