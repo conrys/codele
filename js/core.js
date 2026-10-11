@@ -226,6 +226,7 @@ function openTask(b,from,opts){
   window.scrollTo(0,0);
 }
 function clearOutputs(){
+  cancelDrawingAnimation();
   ["results","hintBox","tkBox","drawBox"].forEach(id=>{$(id).hidden=true});
   setErrLine(null);
 }

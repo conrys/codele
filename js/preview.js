@@ -70,7 +70,12 @@ function showTk(d){
 
 // ---------- Малюнок черепашки ----------
 // Python повертає список ліній, точок і заливок. Тут ми малюємо їх на полотні (canvas).
+let drawingAnimation=0;
+function cancelDrawingAnimation(){
+  if(drawingAnimation){cancelAnimationFrame(drawingAnimation);drawingAnimation=0}
+}
 function showDrawing(d){
+  cancelDrawingAnimation();
   const box=$("drawBox");
   if(!d){box.hidden=true;return}
   box.hidden=false;
@@ -86,32 +91,68 @@ function showDrawing(d){
   const pad=30, k=Math.min((W-2*pad)/(x1-x0),(H-2*pad)/(y1-y0));
   const cx=(x0+x1)/2, cy=(y0+y1)/2;
   const X=x=>W/2+(x-cx)*k, Y=y=>H/2-(y-cy)*k;      // y у turtle росте вгору, на екрані — вниз
-  g.fillStyle=d.bg||"white";
-  g.fillRect(0,0,W,H);
-  g.strokeStyle="#ccd6e2";g.lineWidth=1;            // осі координат
-  g.beginPath();g.moveTo(X(x0),Y(0));g.lineTo(X(x1),Y(0));g.moveTo(X(0),Y(y0));g.lineTo(X(0),Y(y1));g.stroke();
-  d.fills.forEach(f=>{
-    g.fillStyle=f.color;g.beginPath();
-    f.pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
-    g.closePath();g.fill();
-  });
-  g.lineCap="round";
-  d.segs.forEach(s=>{
-    g.strokeStyle=s[4];g.lineWidth=Math.max(2,s[5]*k);
-    g.beginPath();g.moveTo(X(s[0]),Y(s[1]));g.lineTo(X(s[2]),Y(s[3]));g.stroke();
-  });
-  d.dots.forEach(p=>{g.fillStyle=p[3];g.beginPath();g.arc(X(p[0]),Y(p[1]),Math.max(3,p[2]*k/2),0,7);g.fill()});
-  g.fillStyle="#1f3a5f";g.font="20px sans-serif";
-  d.texts.forEach(p=>g.fillText(p[2],X(p[0]),Y(p[1])));
-  // Черепашка: трикутник, що вказує в бік руху
-  d.turtles.forEach(t=>{
-    if(!t.visible)return;
-    const a=-t.heading*Math.PI/180, px=X(t.x), py=Y(t.y);
+  function background(ctx){
+    ctx.fillStyle=d.bg||"white";
+    ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="#ccd6e2";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(X(x0),Y(0));ctx.lineTo(X(x1),Y(0));ctx.moveTo(X(0),Y(y0));ctx.lineTo(X(0),Y(y1));ctx.stroke();
+  }
+  function segment(ctx,s,end=1){
+    ctx.strokeStyle=s[4];ctx.lineWidth=Math.max(2,s[5]*k);ctx.lineCap="round";
+    ctx.beginPath();ctx.moveTo(X(s[0]),Y(s[1]));
+    ctx.lineTo(X(s[0]+(s[2]-s[0])*end),Y(s[1]+(s[3]-s[1])*end));ctx.stroke();
+  }
+  function turtle(ctx,x,y,heading){
+    const a=-heading*Math.PI/180, px=X(x), py=Y(y);
     const pt=(u,v)=>[px+u*Math.cos(a)-v*Math.sin(a),py+u*Math.sin(a)+v*Math.cos(a)];
     const A=pt(14,0),B=pt(-10,8),C=pt(-10,-8);
-    g.fillStyle="#2e7d5b";g.strokeStyle="#1f3a5f";g.lineWidth=2;
-    g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.lineTo(C[0],C[1]);g.closePath();g.fill();g.stroke();
-  });
+    ctx.fillStyle="#2e7d5b";ctx.strokeStyle="#1f3a5f";ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.lineTo(C[0],C[1]);ctx.closePath();ctx.fill();ctx.stroke();
+  }
+  function details(ctx){
+    d.fills.forEach(f=>{
+      ctx.fillStyle=f.color;ctx.beginPath();
+      f.pts.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));
+      ctx.closePath();ctx.fill();
+    });
+    d.dots.forEach(p=>{ctx.fillStyle=p[3];ctx.beginPath();ctx.arc(X(p[0]),Y(p[1]),Math.max(3,p[2]*k/2),0,7);ctx.fill()});
+    ctx.fillStyle="#1f3a5f";ctx.font="20px sans-serif";
+    d.texts.forEach(p=>ctx.fillText(p[2],X(p[0]),Y(p[1])));
+  }
+  function finalFrame(){
+    background(g);
+    d.segs.forEach(s=>segment(g,s));
+    details(g);
+    d.turtles.forEach(t=>{if(t.visible)turtle(g,t.x,t.y,t.heading)});
+  }
+  const segs=d.segs||[];
+  const canAnimate=segs.length&&d.turtles.some(t=>t.visible)&&!matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(!canAnimate){finalFrame();return}
+
+  const cache=document.createElement("canvas");
+  cache.width=W;cache.height=H;
+  const cg=cache.getContext("2d");
+  background(cg);
+  const total=Math.min(6000,Math.max(1500,segs.length*120));
+  const step=total/segs.length;
+  let started=null,completed=0;
+  function frame(now){
+    if(!cv.isConnected)return;
+    if(started===null)started=now;
+    const elapsed=Math.min(now-started,total);
+    const index=Math.min(segs.length-1,Math.floor(elapsed/step));
+    while(completed<index)segment(cg,segs[completed++]);
+    const s=segs[index], progress=elapsed>=total?1:(elapsed-index*step)/step;
+    g.drawImage(cache,0,0);
+    segment(g,s,progress);
+    const x=s[0]+(s[2]-s[0])*progress, y=s[1]+(s[3]-s[1])*progress;
+    const heading=Math.atan2(s[3]-s[1],s[2]-s[0])*180/Math.PI;
+    turtle(g,x,y,heading);
+    if(elapsed<total)drawingAnimation=requestAnimationFrame(frame);
+    else{
+      while(completed<segs.length)segment(cg,segs[completed++]);
+      finalFrame();drawingAnimation=0;
+    }
+  }
+  drawingAnimation=requestAnimationFrame(frame);
 }
-
-
