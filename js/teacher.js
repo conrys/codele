@@ -205,8 +205,12 @@ function drawOverview(){
   const ex=el("div",undefined,"bar");
   ex.append(btn("Таблиця (.csv)",()=>{
     const rows=[["Нік","Ім’я","Розв’язано","Запусків","Остання активність","Середня оцінка"]];
-    d.studs.forEach(s=>{const a=avgGrade(s.id);rows.push([s.nick,s.display_name,d.st[s.id].solved.size,d.st[s.id].runs,d.st[s.id].last||"",a===null?"":a.toFixed(1)])});
-    download("codele-class.csv","\ufeff"+rows.map(r=>r.map(csvCell).join(",")).join("\n"),"text/csv");
+    d.studs.forEach(s=>{
+      const a=avgGrade(s.id),last=d.st[s.id].last;
+      rows.push([s.nick,s.display_name,d.st[s.id].solved.size,d.st[s.id].runs,
+        last?new Date(last).toLocaleString("uk-UA"):"",a===null?"":a.toFixed(1).replace(".",",")]);
+    });
+    download("codele-class.csv","\ufeffsep=;\r\n"+rows.map(r=>r.map(csvCell).join(";")).join("\r\n"),"text/csv;charset=utf-8");
   },"ghost"),btn("Зібрати дані для ШІ",()=>exportAI(d.studs),"ghost"));
   c2.append(ex);
   box.append(c2);
@@ -659,5 +663,4 @@ function manageStudent(s){
   dlg.append(msg,btn("Закрити",()=>{dlg.close();drawTeacher()}));
   dlg.showModal();
 }
-
 
