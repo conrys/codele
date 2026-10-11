@@ -140,6 +140,7 @@ function listTopics(box){
     pg.append(sp);c.append(pg);
     if(t.intro){
       const d=el("details");
+      d.className="topic-guide";
       d.append(el("summary","Як працювати з цією темою"));
       t.intro.forEach(x=>d.append(el("p",x)));
       c.append(d);

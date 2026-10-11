@@ -94,6 +94,8 @@ details p{margin:6px 0}
 .taskbtn.done{border-color:var(--ok);background:var(--okbg)}
 .progress{height:6px;border-radius:999px;background:rgba(127,127,127,.22);overflow:hidden;margin:4px 0 12px}
 .progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--ok));border-radius:999px}
+.topic-guide>summary{background:var(--card2);border:1px solid var(--line);color:var(--accent);padding:9px 12px}
+.topic-guide>summary:hover{background:var(--accent);color:var(--accent-ink)}
 .lesson{border:1px dashed var(--line);border-radius:12px;padding:8px 14px;margin-bottom:12px;background:var(--bg2)}
 .syntax-hint{margin:10px 0;color:var(--mut);font-size:14px;white-space:pre-line}
 .syntax-hint code{display:block;margin-top:4px;color:var(--txt);white-space:pre-wrap}
