@@ -643,12 +643,26 @@ async function drawStudent(){
   else{
     const wrap=el("div",undefined,"table-wrap");
     const table=el("table"),head=el("thead"),hr=el("tr");
-    ["Медаль","За що","Дата"].forEach(x=>hr.append(el("th",x)));
+    ["Медаль","За що","Дата",""].forEach(x=>hr.append(el("th",x)));
     head.append(hr);table.append(head);
     const body=el("tbody");
     awardResult.data.forEach(a=>{
       const row=el("tr");
-      row.append(el("td","🏅 "+a.title),el("td",a.details||"—"),el("td",dt(a.created_at)));
+      const remove=el("td");
+      const del=btn("Видалити",async()=>{
+        if(!confirm("Видалити нагороду «"+a.title+"»?"))return;
+        del.disabled=true;
+        const result=await sb.from("student_awards").delete().eq("id",a.id);
+        if(result.error){
+          awardMsg.textContent="Не вдалося видалити нагороду: "+result.error.message;
+          del.disabled=false;
+          return;
+        }
+        awardMsg.textContent="Нагороду видалено.";
+        await drawStudent();
+      },"ghost danger");
+      remove.append(del);
+      row.append(el("td","🏅 "+a.title),el("td",a.details||"—"),el("td",dt(a.created_at)),remove);
       body.append(row);
     });
     table.append(body);wrap.append(table);c2.append(wrap);
