@@ -1,4 +1,5 @@
 let pyodide;
+let sandboxRun;
 
 self.onmessage=async event=>{
   const message=event.data||{};
@@ -8,6 +9,11 @@ self.onmessage=async event=>{
       pyodide=await loadPyodide({
         indexURL:"https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"
       });
+      const harnessResponse=await fetch("../py/harness.py?v=20261012c");
+      if(!harnessResponse.ok)throw new Error("Не вдалося завантажити підтримку turtle (HTTP "+harnessResponse.status+").");
+      pyodide.globals.set("__sandbox_harness",await harnessResponse.text());
+      pyodide.runPython("exec(__sandbox_harness)");
+      sandboxRun=pyodide.globals.get("sandbox_run");
       ["fetch","XMLHttpRequest","WebSocket","EventSource","importScripts",
         "WebTransport","RTCPeerConnection","webkitRTCPeerConnection",
         "Worker","SharedWorker","BroadcastChannel","indexedDB","caches","openDatabase"]
@@ -29,58 +35,8 @@ self.onmessage=async event=>{
 
   if(message.type!=="run"||!pyodide)return;
   try{
-    pyodide.globals.set("__sandbox_src",String(message.src||""));
-    pyodide.globals.set("__sandbox_stdin",String(message.stdin||""));
-    const result=pyodide.runPython(`
-import contextlib as __contextlib
-import io as __io
-import json as __json
-import sys as __sys
-import traceback as __traceback
-
-class __SandboxOutput:
-    def __init__(self, limit):
-        self.limit = limit
-        self.parts = []
-        self.length = 0
-        self.truncated = False
-    def write(self, value):
-        remaining = self.limit - self.length
-        if remaining > 0:
-            kept = value[:remaining]
-            self.parts.append(kept)
-            self.length += len(kept)
-        if len(value) > max(remaining, 0):
-            self.truncated = True
-        return len(value)
-    def flush(self):
-        pass
-    def getvalue(self):
-        return "".join(self.parts)
-
-__sandbox_stdout = __SandboxOutput(20000)
-__sandbox_stderr = __SandboxOutput(20000)
-__sandbox_old_stdin = __sys.stdin
-__sandbox_namespace = {"__name__": "__main__"}
-__sandbox_error = ""
-try:
-    __sys.stdin = __io.StringIO(__sandbox_stdin)
-    with __contextlib.redirect_stdout(__sandbox_stdout), __contextlib.redirect_stderr(__sandbox_stderr):
-        try:
-            exec(compile(__sandbox_src, "<sandbox>", "exec"), __sandbox_namespace, __sandbox_namespace)
-        except BaseException:
-            __traceback.print_exc()
-finally:
-    __sys.stdin = __sandbox_old_stdin
-__sandbox_result = {
-    "output": __sandbox_stdout.getvalue(),
-    "error": __sandbox_stderr.getvalue(),
-    "truncated": __sandbox_stdout.truncated or __sandbox_stderr.truncated
-}
-__json.dumps(__sandbox_result)
-`);
-    const output=JSON.parse(result);
-    self.postMessage({type:"result",result:output});
+    const result=sandboxRun(String(message.src||""),String(message.stdin||""));
+    self.postMessage({type:"result",result:JSON.parse(result)});
   }catch(error){
     self.postMessage({type:"fail",error:String(error)});
   }

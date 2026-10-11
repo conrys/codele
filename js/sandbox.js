@@ -12,7 +12,7 @@ function listSandbox(box){
   const info=el("details");
   info.append(el("summary","Про пісочницю"));
   info.append(el("p","Пиши довільний код Python і запускай його без перевірки завдання. Рядки для input() введи нижче — по одному на рядок.","mut"));
-  info.append(el("p","Код працює окремо від сторінки; запуск обмежено 5 секундами. Доступні стандартні бібліотеки Python, які підтримує Pyodide у браузері. Системні модулі й доступ до мережі недоступні.","mut"));
+  info.append(el("p","Код працює окремо від сторінки; запуск обмежено 5 секундами. Доступні стандартні бібліотеки Python, які підтримує Pyodide у браузері, та turtle з малюванням на полотні. tkinter, системні модулі й доступ до мережі недоступні.","mut"));
   card.append(info);
 
   const code=el("textarea");
@@ -57,6 +57,15 @@ function listSandbox(box){
   const output=el("pre","","sandbox-output");
   output.setAttribute("aria-live","polite");
   output.textContent="Результат з’явиться тут.";
+  const drawingBox=el("section");
+  drawingBox.hidden=true;
+  drawingBox.append(el("h2","Малюнок"));
+  const drawing=el("canvas");
+  drawing.width=640;
+  drawing.height=480;
+  drawing.className="sandbox-drawing";
+  drawing.setAttribute("aria-label","Малюнок черепашки");
+  drawingBox.append(drawing);
   const run=btn("Запустити",async()=>{
     sandboxCode=code.value;
     sandboxStdin=input.value;
@@ -70,12 +79,15 @@ function listSandbox(box){
     }
     run.disabled=true;
     output.textContent="Запускаю Python…";
+    drawingBox.hidden=true;
     try{
       const result=await runSandboxCode(sandboxCode,sandboxStdin);
       const text=result.output+(result.error?(result.output?"\n":"")+result.error:"");
       output.textContent=text
         ?text.slice(0,SANDBOX_MAX_OUTPUT)+(text.length>SANDBOX_MAX_OUTPUT||result.truncated?"\n… Вивід обрізано.":"")
         :"(програма нічого не вивела)";
+      drawingBox.hidden=!result.draw;
+      if(result.draw)animateDrawing(result.draw,drawing);
     }catch(error){
       output.textContent="Не вдалося запустити Python: "+error.message;
     }finally{
@@ -87,13 +99,13 @@ function listSandbox(box){
   codeActions.append(copy,download);
   card.append(codeActions);
   card.append(el("label","Ввід для input() · по одному значенню на рядок"),input);
-  card.append(run,el("h2","Результат"),output);
+  card.append(run,el("h2","Результат"),output,drawingBox);
   box.append(card);
 }
 
 function runSandboxCode(src,stdin){
   return new Promise((resolve,reject)=>{
-    const worker=new Worker("js/sandbox-worker.js?v=20261012a");
+    const worker=new Worker("js/sandbox-worker.js?v=20261012c");
     let timer=setTimeout(()=>{
       worker.terminate();
       reject(new Error("час очікування запуску Python вичерпано."));

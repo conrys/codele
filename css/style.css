@@ -163,6 +163,7 @@ pre.diff div{padding:0 10px;white-space:pre-wrap}
 .sandbox-code{min-height:240px;tab-size:4}
 .sandbox-input{min-height:84px}
 .sandbox-output{min-height:64px;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.sandbox-drawing{display:block;width:100%;max-width:360px;height:auto;border:1px solid var(--line);border-radius:4px}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var(--line)}

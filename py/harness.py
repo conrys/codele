@@ -568,3 +568,47 @@ def check(src, fname, tests, big):
     finally:
         sys.settrace(None)
     return json.dumps(out,default=str)
+
+def sandbox_run(src, stdin_text):
+    class Output:
+        def __init__(self, limit):
+            self.limit=limit; self.parts=[]; self.length=0; self.truncated=False
+        def write(self, value):
+            remaining=self.limit-self.length
+            if remaining>0:
+                kept=value[:remaining]; self.parts.append(kept); self.length+=len(kept)
+            if len(value)>max(remaining,0): self.truncated=True
+            return len(value)
+        def flush(self): pass
+        def getvalue(self): return ''.join(self.parts)
+
+    out={'output':'','error':None,'error_line':None,'draw':None,'truncated':False}
+    try:
+        code=compile(str(src),'<user>','exec')
+    except SyntaxError as e:
+        out['error']='SyntaxError: '+str(e.msg)
+        out['error_line']=e.lineno
+        return json.dumps(out)
+
+    cv=_Canvas()
+    stdout=Output(20000)
+    old_stdout=sys.stdout
+    count=[0]
+    try:
+        sys.modules['turtle']=build_turtle(cv)
+        builtins.input=_mk_input(str(stdin_text).splitlines())
+        sys.stdout=stdout
+        sys.settrace(make_tracer(count))
+        exec(code,{'__name__':'__main__'})
+    except BaseException as e:
+        out['error']=type(e).__name__+': '+str(e)
+        out['error_line']=_user_line(e)
+    finally:
+        sys.settrace(None)
+        sys.stdout=old_stdout
+        builtins.input=_REAL_INPUT
+        sys.modules.pop('turtle',None)
+    out['output']=stdout.getvalue()
+    out['truncated']=stdout.truncated
+    if cv.turtles: out['draw']=cv.export()
+    return json.dumps(out,default=str)

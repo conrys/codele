@@ -75,11 +75,14 @@ function cancelDrawingAnimation(){
   if(drawingAnimation){cancelAnimationFrame(drawingAnimation);drawingAnimation=0}
 }
 function showDrawing(d){
-  cancelDrawingAnimation();
   const box=$("drawBox");
-  if(!d){box.hidden=true;return}
+  if(!d){cancelDrawingAnimation();box.hidden=true;return}
   box.hidden=false;
-  const cv=$("drawing"), g=cv.getContext("2d"), W=cv.width, H=cv.height;
+  animateDrawing(d,$("drawing"));
+}
+function animateDrawing(d,cv){
+  cancelDrawingAnimation();
+  const g=cv.getContext("2d"), W=cv.width, H=cv.height;
   // Межі малюнка. Мінімальне поле зору — щоб малі малюнки не роздувалися на весь екран.
   let x0=-150,x1=150,y0=-120,y1=120;
   const grow=(x,y)=>{x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)};
