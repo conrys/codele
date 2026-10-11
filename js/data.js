@@ -17,7 +17,7 @@ const OLD_TASKS=[
   expect:"Гав!",needs:["Dog"],inst:{d:"Dog"},has:{Dog:["speak"]},start:""},
  {id:"t_square",title:"Квадрат черепашкою",text:"Підключи turtle, створи черепашку t і намалюй квадрат зі стороною 100 (команди forward і left).",
   turtle:{poly:{n:4,side:100}},uses:["Import"],start:""},
- {id:"t_loop",title:"Квадрат циклом",text:"Намалюй такий самий квадрат зі стороною 100, але вже за допомогою циклу for.",
+ {id:"t_loop",title:"Квадрат циклом",text:"Намалюй такий самий квадрат зі стороною 100.",
   turtle:{poly:{n:4,side:100}},uses:["For"],start:""},
  {id:"t_triangle",title:"Червоний трикутник",text:"Намалюй червоний рівносторонній трикутник зі стороною 80. Колір задай командою t.color(\"red\").",
   turtle:{poly:{n:3,side:80},colors:["red"]},uses:["Import"],start:""},
@@ -126,11 +126,11 @@ const NEW=[
   cases:[{stdin:["2"],expect:"початковий"},{stdin:["5"],expect:"середній"},{stdin:["9"],expect:"достатній"},{stdin:["12"],expect:"високий"},{stdin:["4"],expect:"середній"}],uses:["If"],start:""},
 
  {id:"l_count",title:"Числа по порядку",make:r=>{const n=rint(r,3,7);
-   return {text:"Виведи числа від 1 до "+n+", кожне з нового рядка (цикл for).",expect:Array.from({length:n},(_,i)=>i+1).join("\n"),uses:["For"],start:""}}},
+   return {text:"Виведи числа від 1 до "+n+", кожне з нового рядка.",expect:Array.from({length:n},(_,i)=>i+1).join("\n"),uses:["For"],start:""}}},
  {id:"l_sum",title:"Сума чисел",make:r=>{const n=rint(r,5,20);
-   return {text:"Знайди суму всіх чисел від 1 до "+n+" і виведи її.",expect:String(n*(n+1)/2),start:""}}},
+   return {text:"Знайди суму всіх чисел від 1 до "+n+" і виведи її.",expect:String(n*(n+1)/2),uses:["For"],start:""}}},
  {id:"l_down",title:"Зворотний відлік",make:r=>{const n=rint(r,3,8);
-   return {text:"Виведи числа від "+n+" до 1 (по одному в рядку) за допомогою циклу while.",expect:Array.from({length:n},(_,i)=>n-i).join("\n"),uses:["While"],start:""}}},
+   return {text:"Виведи числа від "+n+" до 1 (по одному в рядку).",expect:Array.from({length:n},(_,i)=>n-i).join("\n"),uses:["While"],start:""}}},
  {id:"l_stars",title:"Трикутник із зірочок",make:r=>{const n=rint(r,3,6);
    return {text:"Виведи трикутник із зірочок висотою "+n+": у першому рядку одна зірочка, у другому дві і так далі.",expect:Array.from({length:n},(_,i)=>"*".repeat(i+1)).join("\n"),uses:["For"],start:""}}},
 
@@ -218,6 +218,9 @@ TOPICS.forEach((tp,ti)=>{let n=0;TASKS.filter(x=>x.topic===tp.id).forEach(t=>{n+
 
 // ---------- Уроки до окремих завдань (ключ — id завдання) ----------
 const LESSONS={
+ l_stars:{topic:"множення рядка на число",
+  text:["У Python рядок (str) можна множити на ціле число (int): це повторює весь рядок задану кількість разів. Наприклад, \"*\" * 3 дає \"***\", а \"ha\" * 2 дає \"haha\".","У трикутнику кількість зірочок у рядку дорівнює його номеру: для першого рядка — 1, для другого — 2 і так далі. Тому можна виводити \"*\" * i всередині циклу."],
+  example:"for i in range(1, 4):\n    print(\"*\" * i)\n# *\n# **\n# ***"},
  tk_window:{topic:"tkinter: вікно і напис",
   text:["tkinter — модуль для вікон. Tk() створює головне вікно, а Label — напис у ньому.","Щоб віджет з’явився, його треба розмістити командою pack(). А mainloop() запускає вікно."],
   example:"import tkinter as tk\n\nroot = tk.Tk()\nroot.title(\"Моє вікно\")\ntk.Label(root, text=\"Привіт\").pack()\nroot.mainloop()"},

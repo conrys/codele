@@ -200,6 +200,9 @@ function openTask(b,from,opts){
   }
   $("title").textContent=task.label||task.title;
   $("text").textContent=task.text||"";
+  const cycleConstructs=(task.uses||[]).filter(x=>x==="For"||x==="While").map(x=>"цикл "+x.toLowerCase());
+  $("constructHint").hidden=!cycleConstructs.length;
+  $("constructHint").querySelector("span").textContent=cycleConstructs.join(", ");
   const syntaxHint=$("syntaxHint");
   syntaxHint.hidden=!task.syntaxHint;
   syntaxHint.querySelector("code").textContent=task.syntaxHint||"";
