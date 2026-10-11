@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Codele — електронний клас з інформатики</title>
 <!-- Стилі винесено в css/style.css. Число після ?v= змінюй при кожному оновленні файлів, щоб браузер не показував старі. -->
-<link rel="stylesheet" href="css/style.css?v=20261011f">
+<link rel="stylesheet" href="css/style.css?v=20261011g">
 <!-- Бібліотека для роботи з базою Supabase (акаунти, завдання, тести). -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
@@ -61,6 +61,7 @@
       <button id="tab_teacher" class="ghost">Від вчителя</button>
       <button id="tab_tests" class="ghost">Тести</button>
       <button id="tab_helper" class="ghost" hidden>Допомога з перевіркою</button>
+      <button id="tab_sandbox" class="ghost">Пісочниця</button>
     </div>
 
     <!-- Список: теми, практика, марафон або завдання від вчителя. -->
@@ -131,8 +132,9 @@
 <!-- Скрипти підключаються по порядку: дані, основа, Python у фоні, меню, акаунти, малюнки, тести, панель вчителя, старт. -->
 <script>const ASSET_V="20261008a";</script>
 <script src="js/data.js?v=20261011d"></script>
-<script src="js/core.js?v=20261011j"></script>
+<script src="js/core.js?v=20261011k"></script>
 <script src="js/worker.js?v=20261008a"></script>
+<script src="js/sandbox.js?v=20261011b"></script>
 <script src="js/menu.js?v=20261008a"></script>
 <script src="js/auth.js?v=20261011e"></script>
 <script src="js/preview.js?v=20261011a"></script>

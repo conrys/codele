@@ -159,6 +159,10 @@ pre.diff div{padding:0 10px;white-space:pre-wrap}
 .medal-button:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
 .medal.locked{opacity:.5;filter:grayscale(1)}
 @media(max-width:420px){.medals{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}}
+.sandbox-code,.sandbox-input{display:block;width:100%;font:14px/1.45 ui-monospace,"Cascadia Code",Menlo,Consolas,monospace}
+.sandbox-code{min-height:240px;tab-size:4}
+.sandbox-input{min-height:84px}
+.sandbox-output{min-height:64px;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var(--line)}
