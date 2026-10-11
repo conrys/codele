@@ -460,8 +460,18 @@ function drawTaskManager(box,cur){
 async function drawStudent(){
   const s=TD.students.find(x=>x.id===T.studentId);
   const box=$("tBody");box.textContent="Завантажую…";
-  const pl=await sb.from("paste_log").select("task_ref,length,body,created_at").eq("user_id",s.id).order("created_at",{ascending:false}).limit(100);
+  const [pl,awardResult,testResult,progressResult]=await Promise.all([
+    sb.from("paste_log").select("task_ref,length,body,created_at").eq("user_id",s.id).order("created_at",{ascending:false}).limit(100),
+    sb.from("student_awards").select("id,title,details,created_at").eq("student_id",s.id).order("created_at",{ascending:false}),
+    sb.from("test_attempts").select("score,max_score,finished_at").eq("user_id",s.id),
+    fetchProgress(s.id).then(data=>({data,error:null}),error=>({data:null,error:error}))
+  ]);
   const st=statsOf(s.id);
+  const studentProgress=progressResult.data||{};
+  const teacherMedals=progressResult.error?[]:earnedMedals(studentProgress,{
+    tests:(testResult.data||[]).filter(a=>a.finished_at),
+    marathons:(TD.marathon||[]).filter(a=>a.user_id===s.id).length
+  });
   $("tTitle").textContent=s.nick;
   box.textContent="";
   const c1=el("div",undefined,"card");
@@ -470,9 +480,56 @@ async function drawStudent(){
   c1.append(btn("Керувати акаунтом",()=>manageStudent(s),"ghost"));
   box.append(c1);
 
-  // Оцінки
+  // Медалі — доступні лише цьому учневі та вчителю його класу
   const c2=el("div",undefined,"card");
-  c2.append(el("h2","Оцінки"));
+  c2.append(el("h2","Медалі учня"));
+  if(progressResult.error)c2.append(el("p","Не вдалося завантажити медалі: "+progressResult.error.message,"err"));
+  if(testResult.error)c2.append(el("p","Не вдалося перевірити медаль за тест: "+testResult.error.message,"err"));
+  if(!progressResult.error&&!testResult.error&&!teacherMedals.length)c2.append(el("p","Учень ще не отримав автоматичних медалей.","mut"));
+  if(teacherMedals.length){
+    const mg=el("div",undefined,"medals");
+    teacherMedals.forEach(m=>{
+      const item=el("div",undefined,"medal");
+      item.append(el("div",m.ico,"ico"),el("b",m.name),el("span",m.desc));
+      mg.append(item);
+    });
+    c2.append(mg);
+  }
+  c2.append(el("h2","Нагороди від учителя"));
+  if(awardResult.error)c2.append(el("p","Не вдалося завантажити нагороди: "+awardResult.error.message,"err"));
+  else if(!(awardResult.data||[]).length)c2.append(el("p","Нагород від учителя поки немає.","mut"));
+  else{
+    const wrap=el("div",undefined,"table-wrap");
+    const table=el("table"),head=el("thead"),hr=el("tr");
+    ["Медаль","За що","Дата"].forEach(x=>hr.append(el("th",x)));
+    head.append(hr);table.append(head);
+    const body=el("tbody");
+    awardResult.data.forEach(a=>{
+      const row=el("tr");
+      row.append(el("td","🏅 "+a.title),el("td",a.details||"—"),el("td",dt(a.created_at)));
+      body.append(row);
+    });
+    table.append(body);wrap.append(table);c2.append(wrap);
+  }
+  const awardTitle=el("input");awardTitle.type="text";awardTitle.maxLength=60;awardTitle.placeholder="Назва медалі";
+  const awardDetails=el("textarea");awardDetails.maxLength=240;awardDetails.rows=2;awardDetails.placeholder="За що (необов’язково)";
+  const awardMsg=el("p","","mut");
+  const awardBtn=btn("Вручити медаль",async()=>{
+    const title=awardTitle.value.trim();
+    if(!title){awardMsg.textContent="Вкажи назву медалі.";return}
+    awardBtn.disabled=true;
+    const result=await sb.from("student_awards").insert({
+      student_id:s.id,teacher_id:me.id,title:title,details:awardDetails.value.trim()||null
+    });
+    if(result.error){awardMsg.textContent="Не вдалося вручити медаль: "+result.error.message;awardBtn.disabled=false;return}
+    await drawStudent();
+  });
+  c2.append(awardTitle,awardDetails,awardBtn,awardMsg);
+  box.append(c2);
+
+  // Оцінки
+  const c3=el("div",undefined,"card");
+  c3.append(el("h2","Оцінки"));
   const sel=el("select");
   sel.append(new Option("Загальна оцінка",""));
   Object.keys(st.refs).forEach(r=>sel.append(new Option(titleOf(r),r)));
@@ -480,7 +537,7 @@ async function drawStudent(){
   const sc=el("input");sc.type="number";sc.min=1;sc.max=12;sc.placeholder="1–12";
   const cm=el("input");cm.type="text";cm.maxLength=500;cm.placeholder="Коментар (необов’язково)";
   const msg=el("p","","mut");
-  c2.append(sel,sc,cm,btn("Поставити оцінку",async()=>{
+  c3.append(sel,sc,cm,btn("Поставити оцінку",async()=>{
     const v=parseInt(sc.value,10);
     if(!(v>=1&&v<=12)){msg.textContent="Оцінка має бути від 1 до 12.";return}
     const r=await sb.from("grades").insert({student_id:s.id,teacher_id:me.id,task_ref:sel.value||null,
@@ -496,35 +553,35 @@ async function drawStudent(){
     m.append(el("b",g.task_title||(g.task_ref?titleOf(g.task_ref):"Загальна оцінка")));
     m.append(el("span",(g.comment?g.comment+" · ":"")+dt(g.created_at),"meta"));
     p.append(m,btn("×",async()=>{await sb.from("grades").delete().eq("id",g.id);TD.grades=TD.grades.filter(x=>x.id!==g.id);drawStudent()},"ghost danger"));
-    c2.append(p);
+    c3.append(p);
   });
-  box.append(c2);
+  box.append(c3);
 
   // Завдання
-  const c3=el("div",undefined,"card");
-  c3.append(el("h2","Завдання та кроки розв’язування"));
+  const c4=el("div",undefined,"card");
+  c4.append(el("h2","Завдання та кроки розв’язування"));
   Object.keys(st.refs).sort((a,b)=>st.refs[b].last>st.refs[a].last?1:-1).forEach(r=>{
     const x=st.refs[r],it=el("div",undefined,"item");
     const info=el("div");
     info.append(el("b",titleOf(r)));
     info.append(el("div",x.runs+" запусків · "+(x.solved?"✓ розв’язано":"не розв’язано")+" · "+dt(x.last),"meta"));
     it.append(info,btn("Кроки",()=>showSteps(s,r),"ghost"));
-    c3.append(it);
+    c4.append(it);
   });
-  if(!Object.keys(st.refs).length)c3.append(el("p","Учень ще не запускав код.","mut"));
-  box.append(c3);
+  if(!Object.keys(st.refs).length)c4.append(el("p","Учень ще не запускав код.","mut"));
+  box.append(c4);
 
   // Вставки
-  const c4=el("div",undefined,"card");
-  c4.append(el("h2","Вставлений код"));
-  if(!(pl.data||[]).length)c4.append(el("p","Вставок немає.","mut"));
+  const c5=el("div",undefined,"card");
+  c5.append(el("h2","Вставлений код"));
+  if(!(pl.data||[]).length)c5.append(el("p","Вставок немає.","mut"));
   (pl.data||[]).forEach(p=>{
     const d=el("details");
     d.append(el("summary",titleOf(p.task_ref)+" · "+p.length+" символів · "+dt(p.created_at)));
     d.append(el("pre",p.body));
-    c4.append(d);
+    c5.append(d);
   });
-  box.append(c4);
+  box.append(c5);
 }
 
 // Порядкова різниця двох версій коду: що додано, що видалено
@@ -663,4 +720,3 @@ function manageStudent(s){
   dlg.append(msg,btn("Закрити",()=>{dlg.close();drawTeacher()}));
   dlg.showModal();
 }
-

@@ -116,15 +116,51 @@ $("tBack").addEventListener("click",()=>teacherBack());
 $("tab_panel").addEventListener("click",()=>showTeacher());
 
 // ---------- Мій профіль ----------
-// Медалі: умови перевіряються за прогресом учня. Нові медалі легко додати в цей список.
+const TOPIC_MEDALS=[
+  ["vars","Змінні"],["math","Арифметика"],["cond","Умови"],["loops","Цикли"],
+  ["pseudo","Псевдокод"],["turtle","Turtle"],["tk","Tkinter"],["oop","Класи"]
+];
 const MEDALS=[
  {ico:"🌱",name:"Перший крок",desc:"Розв’яжи перше завдання",test:c=>c.solved>=1},
- {ico:"🔟",name:"Десятка",desc:"Розв’яжи 10 завдань",test:c=>c.solved>=10},
- {ico:"🎯",name:"З першого разу",desc:"3 завдання з першої спроби",test:c=>c.clean>=3},
- {ico:"🗺️",name:"Мандрівник",desc:"Завдання з кожної основної теми",test:c=>c.topicsDone>=7},
- {ico:"🏁",name:"Марафонець",desc:"Заверши марафон",test:c=>c.marathons>=1},
- {ico:"🧠",name:"Знавець",desc:"Тест на 90% і більше",test:c=>c.bestTest>=90}
+ ...TOPIC_MEDALS.map(([id,name])=>({ico:"🎓",name:"Майстер теми · "+name,desc:"Розв’яжи всі завдання теми «"+name+"»",test:c=>c.topics[id]})),
+ {ico:"🎨",name:"Художник",desc:"Розв’яжи всі три завдання з Turtle",test:c=>c.topics.turtle},
+ {ico:"🪟",name:"Конструктор вікон",desc:"Розв’яжи всі завдання з Tkinter",test:c=>c.topics.tk},
+ {ico:"🛣️",name:"Півдороги",desc:"Розв’яжи щонайменше половину завдань курсу",test:c=>c.solved*2>=TASKS.length},
+ {ico:"🏆",name:"Усе пройдено",desc:"Розв’яжи всі завдання курсу",test:c=>c.solved===TASKS.length},
+ {ico:"🧠",name:"Для досвідчених",desc:"Розв’яжи завдання з розділу «Функції»",test:c=>c.functions},
+ {ico:"💪",name:"Не здаюсь",desc:"Розв’яжи завдання після п’яти або більше невдалих запусків",test:c=>c.stubborn},
+ {ico:"🐞",name:"Налагоджувач",desc:"Після помилки в підсвіченому рядку наступний запуск правильний",test:c=>c.debugger},
+ {ico:"🕵️",name:"Не зубрю, а розумію",desc:"Розв’яжи те саме завдання у двох різних варіантах",test:c=>c.variants,secret:true},
+ {ico:"🎯",name:"Снайпер",desc:"Розв’яжи 10 завдань з першої спроби",test:c=>c.clean>=10},
+ {ico:"💯",name:"Ідеально",desc:"Здай тест на 100%",test:c=>c.perfectTest},
+ {ico:"🏁",name:"Марафонець",desc:"Заверши марафон",test:c=>c.marathons>=1}
 ];
+function achievementContext(progress,attempts){
+  const solvedTasks=TASKS.filter(b=>(progress[b.ref]||{}).solved);
+  const topics={};
+  TOPIC_MEDALS.forEach(([id])=>{
+    const list=TASKS.filter(b=>b.topic===id);
+    topics[id]=list.length>0&&list.every(b=>(progress[b.ref]||{}).solved);
+  });
+  return {
+    solved:solvedTasks.length,
+    clean:TASKS.filter(b=>(progress[b.ref]||{}).firstPassed===true).length,
+    topics:topics,
+    functions:TASKS.some(b=>b.topic==="func"&&(progress[b.ref]||{}).solved),
+    stubborn:Object.keys(progress).some(r=>progress[r].stubborn),
+    debugger:Object.keys(progress).some(r=>progress[r].debugged),
+    variants:TASKS.some(b=>{
+      const p=progress[b.ref];
+      return p&&p.solved&&p.variants&&p.variants.size>=2;
+    }),
+    marathons:attempts.marathons||0,
+    perfectTest:(attempts.tests||[]).some(a=>Number(a.max_score)>0&&Number(a.score)===Number(a.max_score))
+  };
+}
+function earnedMedals(progress,attempts){
+  const ctx=achievementContext(progress,attempts);
+  return MEDALS.filter(m=>m.test(ctx));
+}
 async function openMyProfile(){
   const dlg=$("meDlg");
   dlg.textContent="Завантажую…";
@@ -133,18 +169,16 @@ async function openMyProfile(){
     sb.from("grades").select("score,comment,task_ref,task_title,created_at").eq("student_id",me.id).order("created_at",{ascending:false}),
     sb.from("teacher_tasks").select("id,title"),
     sb.from("marathon_results").select("ms,tasks,finished_at").eq("user_id",me.id).order("finished_at",{ascending:false}),
-    sb.from("test_attempts").select("test_id,score,max_score,finished_at").eq("user_id",me.id)
+    sb.from("test_attempts").select("test_id,score,max_score,finished_at").eq("user_id",me.id),
+    sb.from("student_awards").select("id,title,details,teacher_id,created_at").eq("student_id",me.id).order("created_at",{ascending:false})
   ]);
   const grades=q[0].data||[], mara=q[2].data||[], att=(q[3].data||[]).filter(a=>a.finished_at);
+  const awards=q[4].data||[];
   const ttitles={};(q[1].data||[]).forEach(x=>{ttitles["t:"+x.id]=x.title});
   // Підрахунки для цифр і медалей
-  const mainTopics=TOPICS.filter(t=>t.id!=="oop"&&t.id!=="func");
   const solved=TASKS.filter(b=>(prog[b.ref]||{}).solved).length;
-  const clean=TASKS.filter(b=>{const p=prog[b.ref];return p&&p.firstPassed===true}).length;
   const runs=Object.keys(prog).filter(r=>!r.startsWith("m:")).reduce((a,r)=>a+prog[r].runs,0);
-  const topicsDone=mainTopics.filter(t=>TASKS.some(b=>b.topic===t.id&&(prog[b.ref]||{}).solved)).length;
-  const bestTest=att.reduce((m,a)=>Math.max(m,pct(a.score,a.max_score)),0);
-  const ctx={solved:solved,clean:clean,topicsDone:topicsDone,marathons:mara.length,bestTest:bestTest};
+  const badges=earnedMedals(prog,{marathons:mara.length,tests:att});
   const avg=grades.length?grades.reduce((a,g)=>a+g.score,0)/grades.length:null;
 
   dlg.textContent="";
@@ -176,14 +210,26 @@ async function openMyProfile(){
   // Медалі
   dlg.append(el("h2","Медалі"));
   const mg=el("div",undefined,"medals");
-  let got=0;
-  MEDALS.forEach(m=>{
-    const ok=m.test(ctx);if(ok)got++;
+  const visibleMedals=MEDALS.filter(m=>!m.secret||badges.includes(m));
+  visibleMedals.forEach(m=>{
+    const ok=badges.includes(m);
     const b=el("div",undefined,"medal"+(ok?"":" locked"));
     b.append(el("div",ok?m.ico:"🔒","ico"),el("b",m.name),el("span",m.desc));
     mg.append(b);
   });
-  dlg.append(mg,el("p","Отримано: "+got+" з "+MEDALS.length+". Нові медалі з’являться згодом.","mut"));
+  dlg.append(mg,el("p","Отримано: "+badges.length+" з "+visibleMedals.length+". Медалі бачиш лише ти.","mut"));
+  if(q[3].error)dlg.append(el("p","Не вдалося перевірити медаль за тест: "+q[3].error.message,"err"));
+  dlg.append(el("h2","Нагороди від учителя"));
+  if(q[4].error)dlg.append(el("p","Не вдалося завантажити нагороди: "+q[4].error.message,"err"));
+  else if(!awards.length)dlg.append(el("p","Нагород від учителя поки немає.","mut"));
+  awards.forEach(a=>{
+    const row=el("div",undefined,"item");
+    const info=el("div");
+    info.append(el("b","🏅 "+a.title));
+    if(a.details)info.append(el("div",a.details,"meta"));
+    info.append(el("div",new Date(a.created_at).toLocaleDateString("uk-UA"),"meta"));
+    row.append(info);dlg.append(row);
+  });
   // Оцінки: кольоровий бал, назва, коментар і дата
   dlg.append(el("h2","Оцінки"+(grades.length?" · "+grades.length:"")));
   if(!grades.length)dlg.append(el("p","Оцінок поки немає.","mut"));

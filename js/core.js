@@ -81,23 +81,36 @@ function pv(){try{return JSON.parse(localStorage.getItem("codele-pv:"+me.id))||{
 function pvInc(id){const o=pv();o[id]=(o[id]||0)+1;try{localStorage.setItem("codele-pv:"+me.id,JSON.stringify(o))}catch(e){}}
 
 // ---------- Прогрес ----------
-function noteRun(r,passed){
-  const p=prog[r]||(prog[r]={runs:0,fails:0,solved:false,firstPassed:null});
+function recordProgressRun(target,r,passed,errorLine,variant){
+  const p=target[r]||(target[r]={runs:0,fails:0,solved:false,firstPassed:null,stubborn:false,
+    debugged:false,lastHadHighlightedError:false,variants:new Set()});
   if(p.runs===0)p.firstPassed=passed;
+  if(p.lastHadHighlightedError&&passed)p.debugged=true;
+  if(passed){
+    if(p.fails>=5)p.stubborn=true;
+    if(variant!==null&&variant!==undefined)p.variants.add(String(variant));
+  }
+  p.lastHadHighlightedError=!passed&&errorLine!==null&&errorLine!==undefined;
   p.runs++;
   if(passed)p.solved=true;else p.fails++;
+}
+function noteRun(r,passed,errorLine,variant){recordProgressRun(prog,r,passed,errorLine,variant)}
+async function fetchProgress(userId){
+  const loaded={};
+  const pageSize=1000;
+  for(let offset=0;;offset+=pageSize){
+    const r=await sb.from("runs").select("task_ref,passed,error_line,variant,created_at").eq("user_id",userId)
+      .order("created_at",{ascending:true}).range(offset,offset+pageSize-1);
+    if(r.error)throw r.error;
+    (r.data||[]).forEach(x=>recordProgressRun(loaded,x.task_ref,x.passed,x.error_line,x.variant));
+    if(!r.data||r.data.length<pageSize)return loaded;
+  }
 }
 async function loadProgress(){
   prog={};
   if(!sb||!me)return;
-  const pageSize=1000;
-  for(let offset=0;;offset+=pageSize){
-    const r=await sb.from("runs").select("task_ref,passed,created_at").eq("user_id",me.id)
-      .order("created_at",{ascending:true}).range(offset,offset+pageSize-1);
-    if(r.error){prog={};toast("Не вдалося завантажити прогрес: "+r.error.message);return}
-    (r.data||[]).forEach(x=>noteRun(x.task_ref,x.passed));
-    if(!r.data||r.data.length<pageSize)return;
-  }
+  try{prog=await fetchProgress(me.id)}
+  catch(e){prog={};toast("Не вдалося завантажити прогрес: "+e.message)}
 }
 
 // ---------- Вкладки та списки ----------
@@ -403,7 +416,7 @@ async function runCode(){
   catch(e){res={error:"Не вдалося виконати перевірку.",rows:[]}}
   const passed=!res.error&&(res.rows||[]).every(r=>r[0]);
   if(!passed){if(marathon)marathon.fails++;}
-  noteRun(ref,passed);
+  noteRun(ref,passed,res.error_line,seed);
   const level=passed?3:Math.min(3,Math.max(1,failsNow()));
   showResults(res,passed,level);
   showHint(res,passed,level);
