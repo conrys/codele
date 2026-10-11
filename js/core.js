@@ -82,15 +82,22 @@ function pvInc(id){const o=pv();o[id]=(o[id]||0)+1;try{localStorage.setItem("cod
 
 // ---------- Прогрес ----------
 function noteRun(r,passed){
-  const p=prog[r]||(prog[r]={runs:0,fails:0,solved:false});
+  const p=prog[r]||(prog[r]={runs:0,fails:0,solved:false,firstPassed:null});
+  if(p.runs===0)p.firstPassed=passed;
   p.runs++;
   if(passed)p.solved=true;else p.fails++;
 }
 async function loadProgress(){
   prog={};
   if(!sb||!me)return;
-  const r=await sb.from("runs").select("task_ref,passed").eq("user_id",me.id).limit(5000);
-  (r.data||[]).forEach(x=>noteRun(x.task_ref,x.passed));
+  const pageSize=1000;
+  for(let offset=0;;offset+=pageSize){
+    const r=await sb.from("runs").select("task_ref,passed,created_at").eq("user_id",me.id)
+      .order("created_at",{ascending:true}).range(offset,offset+pageSize-1);
+    if(r.error){prog={};toast("Не вдалося завантажити прогрес: "+r.error.message);return}
+    (r.data||[]).forEach(x=>noteRun(x.task_ref,x.passed));
+    if(!r.data||r.data.length<pageSize)return;
+  }
 }
 
 // ---------- Вкладки та списки ----------

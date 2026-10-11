@@ -140,7 +140,7 @@ async function openMyProfile(){
   // Підрахунки для цифр і медалей
   const mainTopics=TOPICS.filter(t=>t.id!=="oop"&&t.id!=="func");
   const solved=TASKS.filter(b=>(prog[b.ref]||{}).solved).length;
-  const clean=TASKS.filter(b=>{const p=prog[b.ref];return p&&p.solved&&p.fails===0}).length;
+  const clean=TASKS.filter(b=>{const p=prog[b.ref];return p&&p.firstPassed===true}).length;
   const runs=Object.keys(prog).filter(r=>!r.startsWith("m:")).reduce((a,r)=>a+prog[r].runs,0);
   const topicsDone=mainTopics.filter(t=>TASKS.some(b=>b.topic===t.id&&(prog[b.ref]||{}).solved)).length;
   const bestTest=att.reduce((m,a)=>Math.max(m,pct(a.score,a.max_score)),0);
