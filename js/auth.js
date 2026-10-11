@@ -30,13 +30,15 @@ async function showApp(){
   $("auth").hidden=true;
   $("appBody").hidden=false;
   $("tPanel").hidden=true;
-  menuBtn.textContent=me.nick;
+  menuBtn.textContent=(me.role==="teacher"?"👨‍🏫 ":"🎓 ")+me.nick;
   $("miTeacher").hidden=me.role!=="teacher";
+  $("tab_panel").hidden=me.role!=="teacher";
   // Скільки часу учням показувати значок «вставлено», вирішує вчитель
   const res=await Promise.all([sb.rpc("paste_mark_visible"),loadProgress()]);
   pasteMarkVisible=me.role==="teacher"||res[0].data!==false;
   task=null;tab="topics";view="list";
   render();
+  if(me.role==="teacher")showTeacher();      // вчитель одразу потрапляє в панель
 }
 // Завантажує профіль. Якщо його ще немає, просимо дозаповнити ім'я та код класу.
 async function loadProfile(user){
@@ -110,33 +112,102 @@ async function authStart(){
 }
 $("miProfile").addEventListener("click",()=>{toggleMenu(false);openMyProfile()});
 $("miTeacher").addEventListener("click",()=>{toggleMenu(false);showTeacher()});
-$("tBack").addEventListener("click",()=>{if(T.studentId){T.studentId=null;drawTeacher()}else if(T.testId){T.testId=null;drawTeacher()}else hideTeacher()});
+$("tBack").addEventListener("click",teacherBack);
+$("tab_panel").addEventListener("click",()=>showTeacher());
 
 // ---------- Мій профіль ----------
+// Медалі: умови перевіряються за прогресом учня. Нові медалі легко додати в цей список.
+const MEDALS=[
+ {ico:"🌱",name:"Перший крок",desc:"Розв’яжи перше завдання",test:c=>c.solved>=1},
+ {ico:"🔟",name:"Десятка",desc:"Розв’яжи 10 завдань",test:c=>c.solved>=10},
+ {ico:"🎯",name:"З першого разу",desc:"3 завдання з першої спроби",test:c=>c.clean>=3},
+ {ico:"🗺️",name:"Мандрівник",desc:"Завдання з кожної основної теми",test:c=>c.topicsDone>=7},
+ {ico:"🏁",name:"Марафонець",desc:"Заверши марафон",test:c=>c.marathons>=1},
+ {ico:"🧠",name:"Знавець",desc:"Тест на 90% і більше",test:c=>c.bestTest>=90}
+];
 async function openMyProfile(){
   const dlg=$("meDlg");
   dlg.textContent="Завантажую…";
   dlg.showModal();
-  const g=await sb.from("grades").select("score,comment,task_ref,task_title,created_at").eq("student_id",me.id).order("created_at",{ascending:false});
+  const q=await Promise.all([
+    sb.from("grades").select("score,comment,task_ref,task_title,created_at").eq("student_id",me.id).order("created_at",{ascending:false}),
+    sb.from("teacher_tasks").select("id,title"),
+    sb.from("marathon_results").select("ms,tasks,finished_at").eq("user_id",me.id).order("finished_at",{ascending:false}),
+    sb.from("test_attempts").select("test_id,score,max_score,finished_at").eq("user_id",me.id)
+  ]);
+  const grades=q[0].data||[], mara=q[2].data||[], att=(q[3].data||[]).filter(a=>a.finished_at);
+  const ttitles={};(q[1].data||[]).forEach(x=>{ttitles["t:"+x.id]=x.title});
+  // Підрахунки для цифр і медалей
+  const mainTopics=TOPICS.filter(t=>t.id!=="oop"&&t.id!=="func");
+  const solved=TASKS.filter(b=>(prog[b.ref]||{}).solved).length;
+  const clean=TASKS.filter(b=>{const p=prog[b.ref];return p&&p.solved&&p.fails===0}).length;
+  const runs=Object.keys(prog).filter(r=>!r.startsWith("m:")).reduce((a,r)=>a+prog[r].runs,0);
+  const topicsDone=mainTopics.filter(t=>TASKS.some(b=>b.topic===t.id&&(prog[b.ref]||{}).solved)).length;
+  const bestTest=att.reduce((m,a)=>Math.max(m,pct(a.score,a.max_score)),0);
+  const ctx={solved:solved,clean:clean,topicsDone:topicsDone,marathons:mara.length,bestTest:bestTest};
+  const avg=grades.length?grades.reduce((a,g)=>a+g.score,0)/grades.length:null;
+
   dlg.textContent="";
-  dlg.append(el("h2",me.nick+(me.role==="teacher"?" · вчитель":"")));
+  // Шапка
+  const head=el("div",undefined,"phead");
+  head.append(el("div",me.role==="teacher"?"👨‍🏫":"🎓","avatar"));
+  const hi=el("div");
+  hi.append(el("h2",me.name),el("div","@"+me.nick+(me.role==="teacher"?" · вчитель":" · учень"),"meta"));
+  head.append(hi);
+  dlg.append(head);
+  // Цифри
+  const grid=el("div",undefined,"sgrid");
+  [["Розв’язано",solved+" з "+TASKS.length],["Запусків коду",runs],["Тестів здано",att.length],["Середня оцінка",avg===null?"–":avg.toFixed(1)]].forEach(x=>{
+    const b=el("div",undefined,"sbox");b.append(el("b",String(x[1])),el("span",x[0]));grid.append(b);
+  });
+  dlg.append(grid);
+  // Прогрес по темах
+  dlg.append(el("h2","Прогрес по темах"));
+  TOPICS.forEach(t=>{
+    const list=TASKS.filter(b=>b.topic===t.id);
+    if(!list.length)return;
+    const done=list.filter(b=>(prog[b.ref]||{}).solved).length;
+    const r=el("div");
+    r.append(el("div",t.name+" · "+done+" з "+list.length,"meta"));
+    const pg=el("div",undefined,"progress"),sp=el("span");
+    sp.style.width=Math.round(done/list.length*100)+"%";
+    pg.append(sp);r.append(pg);dlg.append(r);
+  });
+  // Медалі
+  dlg.append(el("h2","Медалі"));
+  const mg=el("div",undefined,"medals");
+  let got=0;
+  MEDALS.forEach(m=>{
+    const ok=m.test(ctx);if(ok)got++;
+    const b=el("div",undefined,"medal"+(ok?"":" locked"));
+    b.append(el("div",ok?m.ico:"🔒","ico"),el("b",m.name),el("span",m.desc));
+    mg.append(b);
+  });
+  dlg.append(mg,el("p","Отримано: "+got+" з "+MEDALS.length+". Нові медалі з’являться згодом.","mut"));
+  // Оцінки: кольоровий бал, назва, коментар і дата
+  dlg.append(el("h2","Оцінки"+(grades.length?" · "+grades.length:"")));
+  if(!grades.length)dlg.append(el("p","Оцінок поки немає.","mut"));
+  grades.forEach(x=>{
+    const title=x.task_title||(x.task_ref?(ttitles[x.task_ref]||titleOf(x.task_ref)):"Загальна оцінка");
+    const row=el("div",undefined,"grade");
+    row.append(el("div",String(x.score),"gscore "+gcls(x.score)));
+    const m=el("div",undefined,"gmeta");
+    m.append(el("b",title),el("span",(x.comment?x.comment+" · ":"")+new Date(x.created_at).toLocaleDateString("uk-UA"),"meta"));
+    row.append(m);
+    dlg.append(row);
+  });
+  // Зміна імені
+  const det=el("details");
+  det.append(el("summary","Змінити ім’я"));
   const nameIn=el("input");nameIn.type="text";nameIn.value=me.name;nameIn.maxLength=40;
-  const label=el("label","Ім’я");label.append(nameIn);
   const msg=el("p","","mut");
-  dlg.append(label,btn("Зберегти ім’я",async()=>{
+  det.append(nameIn,btn("Зберегти ім’я",async()=>{
     const v=nameIn.value.trim();
     if(!v){msg.textContent="Ім’я не може бути порожнім.";return}
     const r=await sb.from("profiles").update({display_name:v}).eq("id",me.id);
     msg.textContent=r.error?"Не вдалося зберегти.":"Збережено.";
     if(!r.error)me.name=v;
   },"ghost"),msg);
-  const solved=TASKS.filter(b=>(prog[b.ref]||{}).solved).length;
-  dlg.append(el("p","Розв’язано завдань: "+solved+" з "+TASKS.length,"mut"));
-  dlg.append(el("h2","Мої оцінки"));
-  const list=(g.data||[]);
-  if(!list.length)dlg.append(el("p","Оцінок поки немає.","mut"));
-  list.forEach(x=>dlg.append(el("p",x.score+" · "+(x.task_title||(x.task_ref?titleOf(x.task_ref):"загальна"))+(x.comment?" — "+x.comment:"")+" ("+new Date(x.created_at).toLocaleDateString("uk-UA")+")")));
+  dlg.append(det);
   dlg.append(btn("Закрити",()=>dlg.close()));
 }
-
-

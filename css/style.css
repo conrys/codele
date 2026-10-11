@@ -1,127 +1,181 @@
-/* Кольори збережені змінними (--paper, --ink тощо). Щоб змінити колір усюди, поміняй його тут один раз. */
-:root{--paper:#eef3f8;--grid:#d3dfec;--ink:#1f3a5f;--red:#c8402e;--green:#2e7d5b;--hl:#ffe45c;--hlink:#1f3a5f;--card:#fbfdff;--mut:#5b7089}
-/* Темна тема вмикається сама, якщо в телефоні або комп'ютері обрано темний режим. */
-@media (prefers-color-scheme:dark){:root{--paper:#14202f;--grid:#1f3147;--ink:#dbe7f5;--red:#ff7a66;--green:#5fd0a0;--hl:#e8c93a;--hlink:#14202f;--card:#1a2a3d;--mut:#8ea4bd}}
+/* =====================================================================
+   Codele: стилі. Усі кольори — змінні в :root, тому тему легко змінити в одному місці.
+   Світла тема вмикається автоматично, якщо так налаштовано пристрій.
+   ===================================================================== */
+:root{
+  --bg:#0f1722;--bg2:#121c2a;--card:#162235;--card2:#1c2b42;--line:rgba(255,255,255,.1);
+  --txt:#e8eef7;--mut:#93a5bb;--accent:#3b82f6;--accent2:#2563eb;--accent-ink:#fff;
+  --ok:#34d399;--okbg:rgba(52,211,153,.13);--danger:#f87171;--dangerbg:rgba(248,113,113,.14);--warn:#fbbf24;
+  --hl:#ffe45c;--hlink:#1f2937;--grid:rgba(255,255,255,.035);--radius:14px;
+  /* старі назви для сумісності */
+  --ink:var(--txt);--paper:var(--bg);--red:var(--danger);--green:var(--ok);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root{--bg:#eef3f9;--bg2:#e7eef7;--card:#fff;--card2:#f1f5fb;--line:rgba(15,23,42,.12);
+    --txt:#0f1b2d;--mut:#5b6b82;--accent:#2563eb;--accent2:#1d4ed8;--ok:#15803d;--okbg:rgba(21,128,61,.11);
+    --danger:#dc2626;--dangerbg:rgba(220,38,38,.09);--warn:#b45309;--hl:#ffe45c;--grid:rgba(15,23,42,.05);color-scheme:light}
+}
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background-color:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;color:var(--ink);font:16px/1.5 "Trebuchet MS",system-ui,sans-serif;padding:16px}
-main{max-width:640px;margin:0 auto}
-/* Для коду беремо моноширинний шрифт: усі літери однакової ширини. */
-code,textarea,.mono{font-family:ui-monospace,"Cascadia Code",Menlo,Consolas,monospace}
-h1{margin:8px 0 0;font-size:28px}
-.sub{color:var(--mut);margin:0 0 16px}
-/* .card — біла картка з рамкою для окремих блоків. */
-.card{background:var(--card);border:2px solid var(--ink);border-radius:6px;padding:16px;margin-bottom:16px}
-h2{margin:0 0 8px;font-size:20px}
-.sig{background:var(--hl);color:var(--hlink);padding:2px 8px;border-radius:3px;display:inline-block}
-textarea{width:100%;min-height:180px;resize:vertical;font-size:15px;line-height:1.5;tab-size:4;background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px;padding:12px}
-textarea:disabled{opacity:.5}
-textarea:focus,button:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
-/* .bar — рядок кнопок. flex-wrap переносить кнопки на новий рядок, якщо не вміщаються. */
-.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
-button{font:inherit;font-weight:700;background:var(--ink);color:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:10px 18px;cursor:pointer}
-button.ghost{background:transparent;color:var(--ink)}
-button:disabled{opacity:.5;cursor:wait}
-#status{color:var(--mut)}
-/* .stats — три колонки з цифрами (токени, кроки, рекорд). */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
-.stat b{display:block;font-size:34px;line-height:1.1}
-.stat span{font-size:13px;color:var(--mut)}
-.row{display:flex;gap:8px;padding:6px 0;border-top:1px dashed var(--grid);font-size:14px;overflow-wrap:anywhere}
-.ok{color:var(--green);font-weight:700}
-.bad{color:var(--red);font-weight:700}
-.err{color:var(--red);white-space:pre-wrap}
-small{color:var(--mut)}
-select{font:inherit;padding:9px 10px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink);max-width:100%}
-/* Значок «вставлено». */
-.badge{background:var(--hl);color:var(--hlink);font-weight:700;font-size:13px;padding:2px 8px;border-radius:3px}
-/* Повідомлення, що ненадовго з'являється внизу екрана. */
-#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:12px 16px;border-radius:6px;box-shadow:0 2px 0 var(--hl)}
-#toast[hidden]{display:none}
-details.card summary{cursor:pointer;font-weight:700}
-details.card ul{margin:8px 0 0;padding-left:20px}
-@media (prefers-reduced-motion:no-preference){.stat b{transition:color .2s}}
-/* Шапка сторінки та випадне меню. */
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.menu{position:relative}
-#menuList{position:absolute;right:0;top:calc(100% + 6px);z-index:5;list-style:none;margin:0;padding:6px;background:var(--card);border:2px solid var(--ink);border-radius:6px;min-width:160px}
-#menuList[hidden]{display:none}
-#menuList button{width:100%;text-align:left;background:transparent;color:var(--ink);border:0;padding:8px 10px}
-#menuList button:hover:not(:disabled){background:var(--hl);color:var(--hlink)}
-/* Вікно з правилами. */
-dialog{background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px;max-width:min(520px,calc(100% - 32px));padding:20px}
-dialog::backdrop{background:rgba(20,32,47,.6)}
-dialog ul{padding-left:20px}
-/* Форма входу та рейтинг */
-label{display:block;margin-bottom:6px}
-input[type=text],input[type=password]{width:100%;padding:10px;margin:4px 0 8px;font:inherit;background:var(--card);color:var(--ink);border:2px solid var(--ink);border-radius:6px}
+body{background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px;color:var(--txt);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px 16px 48px}
+main{max-width:680px;margin:0 auto}
+code,pre,textarea,.mono{font-family:ui-monospace,"Cascadia Code",Menlo,Consolas,monospace}
+h1{margin:0;font-size:26px;letter-spacing:.2px}
+h2{margin:0 0 8px;font-size:19px}
+p{margin:6px 0}
+small,.mut{color:var(--mut)}
+.mut{font-size:14px}
+.meta{font-size:13px;color:var(--mut)}
+.err{color:var(--danger);white-space:pre-wrap}
+
+/* ---------- Картки та розділювачі ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 6px 18px rgba(0,0,0,.16)}
+.card.hint{border-left:5px solid var(--hl)}
+.notice{background:var(--okbg);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.row{display:flex;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:14px;overflow-wrap:anywhere}
+.row:first-of-type{border-top:0}
+.ok{color:var(--ok);font-weight:700}
+.bad{color:var(--danger);font-weight:700}
+
+/* ---------- Кнопки: головна дія — акцентна, друга — контурна, небезпечна — червона ---------- */
+button{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:1px solid transparent;border-radius:10px;padding:9px 16px;cursor:pointer;transition:background .15s,transform .05s,color .15s}
+button:hover:not(:disabled){background:var(--accent2)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
+button.ghost:hover:not(:disabled){background:rgba(127,127,127,.14)}
+button.danger{background:transparent;color:var(--danger);border-color:rgba(248,113,113,.45)}
+button.danger:hover:not(:disabled){background:var(--danger);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.bar button{flex:0 0 auto}
+
+/* ---------- Поля вводу ---------- */
+label{display:block;margin-bottom:6px;font-size:14px;color:var(--mut)}
+input,select,textarea{font:inherit;background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;margin:4px 0 8px;max-width:100%}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=datetime-local],select{width:100%}
 input:disabled{opacity:.6}
-input:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
-#boardBody table{width:100%;border-collapse:collapse;font-size:15px}
-#boardBody td{padding:8px 4px;border-top:1px dashed var(--grid)}
-#boardBody tr{cursor:pointer}
-#boardBody tr.me td{background:var(--hl);color:var(--hlink)}
-#boardBody .place{font-weight:700;width:30px}
-/* Профіль: кубки, значки, таблиця видимості */
-.icons{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-.ic{text-align:center;font-size:12px;line-height:1.2;width:76px}
-.ic svg{display:block;margin:0 auto 2px}
-.mut{color:var(--mut);font-size:14px}
+input[type=checkbox],input[type=radio]{width:20px;height:20px;margin:0;padding:0;accent-color:var(--accent)}
+textarea.json{width:100%;min-height:140px;font-size:13px;line-height:1.45}
+.opt{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0;color:var(--txt);font-size:16px}
+
+/* ---------- Шапка й меню ---------- */
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.menu{position:relative}
+#menuBtn{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+#menuBtn:hover:not(:disabled){background:var(--card2)}
+#menuList{position:absolute;right:0;top:calc(100% + 6px);z-index:5;list-style:none;margin:0;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+#menuList[hidden]{display:none}
+#menuList button{width:100%;text-align:left;background:transparent;color:var(--txt);border:0;padding:9px 10px;font-weight:500}
+#menuList button:hover:not(:disabled){background:rgba(127,127,127,.16);color:var(--txt)}
+
+/* ---------- Вкладки: одна суцільна плашка, активна вкладка виділена ---------- */
+.tabs{display:flex;gap:4px;overflow-x:auto;white-space:nowrap;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;-webkit-overflow-scrolling:touch}
+.tabs button{flex:0 0 auto;padding:8px 14px;border-radius:9px}
+.tabs button.ghost{background:transparent;color:var(--mut);border-color:transparent}
+.tabs button.ghost:hover:not(:disabled){background:rgba(127,127,127,.14);color:var(--txt)}
+
+/* ---------- Розгортні блоки ---------- */
+summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border-radius:10px;padding:6px 8px;margin:0 -8px;font-weight:600}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"▾";color:var(--mut);transition:transform .2s}
+details[open]>summary::after{transform:rotate(180deg)}
+summary:hover{background:rgba(127,127,127,.12)}
+details.card>summary{font-size:19px;font-weight:700}
+details.card[open]>summary{margin-bottom:8px}
+details p{margin:6px 0}
+
+/* ---------- Теми, завдання, прогрес ---------- */
+.tasks{display:flex;flex-wrap:wrap;gap:8px}
+.taskbtn{background:var(--card2);color:var(--txt);border-color:var(--line);font-weight:500;text-align:left}
+.taskbtn:hover:not(:disabled){background:var(--accent);color:#fff}
+.taskbtn.done{border-color:var(--ok);background:var(--okbg)}
+.progress{height:6px;border-radius:999px;background:rgba(127,127,127,.22);overflow:hidden;margin:4px 0 12px}
+.progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--ok));border-radius:999px}
+.lesson{border:1px dashed var(--line);border-radius:12px;padding:8px 14px;margin-bottom:12px;background:var(--bg2)}
+.sig,.badge{display:inline-block;background:var(--hl);color:var(--hlink);border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700}
+.sig{font-size:15px}
+pre{background:var(--bg2);border:1px solid var(--line);padding:10px;border-radius:10px;overflow-x:auto;font-size:13px;white-space:pre-wrap}
+pre.diff{padding:6px 0}
+pre.diff div{padding:0 10px;white-space:pre-wrap}
+.d-add{background:rgba(52,211,153,.2)}
+.d-del{background:rgba(248,113,113,.18);text-decoration:line-through}
+
+/* ---------- Редактор з підсвіткою помилкового рядка ---------- */
+.editor{position:relative;margin-bottom:8px;background:var(--bg2);border-radius:12px}
+#hl,#code{margin:0;padding:10px 12px;font:15px/24px ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;white-space:pre;tab-size:4;box-sizing:border-box;width:100%}
+#hl{position:absolute;inset:1px;overflow:hidden;color:transparent;pointer-events:none;background:transparent;border:0;border-radius:11px}
+#code{position:relative;min-height:220px;background:transparent;resize:vertical;overflow:auto;border:1px solid var(--line);border-radius:12px;color:var(--txt);margin:0}
+.hl-line{height:24px}
+.hl-line.err{background:rgba(248,113,113,.28);box-shadow:inset 4px 0 0 var(--danger)}
+
+/* ---------- Цифри ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stat b{display:block;font-size:30px;line-height:1.1}
+.stat span{font-size:13px;color:var(--mut)}
+.sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.sbox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.sbox b{display:block;font-size:24px}
+.sbox span{font-size:13px;color:var(--mut)}
+.sbox.click{cursor:pointer}
+.sbox.click:hover{background:var(--card2)}
+
+/* ---------- Списки: учні, тести, перевірка ---------- */
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item.click{cursor:pointer;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:10px}
+.item.click:hover{background:rgba(127,127,127,.12)}
+.item .bar{margin:0}
+.lrow{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.lrow:first-of-type{border-top:0}
+.rank{text-align:center;font-size:22px;color:var(--mut);font-weight:700}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--card2);border:1px solid var(--line);color:var(--mut)}
+.pill.good{background:var(--okbg);color:var(--ok);border-color:transparent}
+.pill.warn{background:rgba(251,191,36,.15);color:var(--warn);border-color:transparent}
+.gform{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.gform input[type=number]{width:90px;margin:0}
+.gform input[type=text]{flex:1 1 160px;width:auto;margin:0}
+
+/* ---------- Оцінки та медалі ---------- */
+.grade{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.grade:first-of-type{border-top:0}
+.gscore{flex:0 0 auto;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:18px;color:#0b1220}
+.g-hi{background:#34d399}.g-mid{background:#fbbf24}.g-low{background:#fb923c}.g-bad{background:#f87171}
+.gmeta{flex:1 1 auto;min-width:0}
+.gmeta b{display:block;overflow-wrap:anywhere}
+.medals{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.medal{text-align:center;padding:10px 6px;border-radius:12px;background:var(--card2);border:1px solid var(--line)}
+.medal .ico{font-size:28px;line-height:1.2}
+.medal b{display:block;font-size:13px}
+.medal span{display:block;font-size:11px;color:var(--mut)}
+.medal.locked{opacity:.5;filter:grayscale(1)}
+.avatar{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--card2);border:1px solid var(--line);font-size:26px}
+.phead{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+
+/* ---------- Тести ---------- */
+.q{padding:12px 0;border-top:1px solid var(--line)}
+.q.good{border-left:4px solid var(--ok);padding-left:12px}
+.q.badq{border-left:4px solid var(--danger);padding-left:12px}
+.qmap{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.qmap span{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:13px;font-weight:700}
+.qmap .y{background:var(--okbg);color:var(--ok)}
+.qmap .n{background:var(--dangerbg);color:var(--danger)}
+
+/* ---------- Вікно, повідомлення ---------- */
+dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:16px;width:min(560px,calc(100% - 24px));max-height:90vh;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+dialog::backdrop{background:rgba(5,10,18,.65)}
 dialog h2{margin:14px 0 6px}
-dialog table{width:100%;border-collapse:collapse}
-dialog th,dialog td{padding:6px 4px;border-top:1px dashed var(--grid);text-align:center}
-dialog th{font-size:13px;color:var(--mut);border-top:0}
-dialog td:first-child{text-align:left}
-input[type=checkbox]{width:20px;height:20px}
-/* Урок і панель вчителя */
-.lesson{border:2px dashed var(--ink);border-radius:6px;padding:8px 12px;margin-bottom:12px;background:var(--paper)}
-.lesson summary{cursor:pointer;font-weight:700}
-pre{background:var(--paper);padding:8px;border-radius:4px;overflow-x:auto;font-size:13px;white-space:pre-wrap}
-#tBody table{width:100%;border-collapse:collapse;font-size:14px}
-#tBody th,#tBody td{padding:6px 4px;border-top:1px dashed var(--grid);text-align:left}
-#tBody th{font-size:12px;color:var(--mut);border-top:0}
+dialog h2:first-child{margin-top:0}
 dialog button{margin:4px 6px 4px 0}
-details{margin:6px 0}
-/* Вікно tkinter у попередньому перегляді */
-.tk-window{border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#f0f0f0;color:#111}
-.tk-title{background:var(--ink);color:var(--paper);padding:4px 10px;font-size:13px}
+dialog ul{padding-left:20px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--card2);color:var(--txt);border:1px solid var(--line);padding:12px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:10}
+#toast[hidden]{display:none}
+
+/* ---------- Вікно tkinter у попередньому перегляді ---------- */
+.tk-window{border:1px solid #888;border-radius:8px;overflow:hidden;background:#f0f0f0;color:#111}
+.tk-title{background:#2d3a4f;color:#fff;padding:4px 10px;font-size:13px}
 .tk-body{padding:12px;min-height:80px}
 .tk-label{padding:2px 4px}
 .tk-btn{background:#e1e1e1;color:#111;border:1px solid #888;border-radius:3px;padding:4px 12px;font-weight:400}
 .tk-body input{width:160px;margin:0;padding:3px 6px;border:1px solid #888;border-radius:2px;background:#fff;color:#111}
-/* Редактор коду з підсвіткою помилкового рядка: прозорий шар під текстовим полем */
-.editor{position:relative;margin-bottom:8px;background:var(--card);border-radius:6px}
-#hl,#code{margin:0;padding:10px 12px;font:15px/24px ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;white-space:pre;tab-size:4;box-sizing:border-box;width:100%}
-#hl{position:absolute;inset:2px;overflow:hidden;color:transparent;pointer-events:none;background:transparent;border:0;border-radius:4px}
-#code{position:relative;min-height:220px;background:transparent;resize:vertical;overflow:auto;border:2px solid var(--ink);border-radius:6px;color:var(--ink)}
-.hl-line{height:24px}
-.hl-line.err{background:rgba(200,64,46,.3);box-shadow:inset 4px 0 0 var(--red)}
-/* Списки тем і завдань */
-.tasks{display:flex;flex-wrap:wrap;gap:8px}
-.taskbtn{background:var(--card);color:var(--ink);font-weight:400;text-align:left}
-.taskbtn.done{border-color:var(--green)}
-.card.hint{border-left:6px solid var(--hl)}
-.hint p,.card details p{margin:4px 0}
-/* Кроки розв'язування (різниця версій коду) */
-pre.diff{padding:6px 0}
-pre.diff div{padding:0 8px;white-space:pre-wrap}
-.d-add{background:rgba(46,125,91,.28)}
-.d-del{background:rgba(200,64,46,.22);text-decoration:line-through}
-#tBody select,#tBody input[type=number],#tBody input[type=date],#tBody input[type=datetime-local]{width:100%;margin:4px 0 8px;font:inherit;padding:8px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink)}
-
-/* Вкладки в один рядок із прокруткою (на телефоні не переносяться) */
-.tabs{display:flex;gap:8px;overflow-x:auto;white-space:nowrap;padding-bottom:6px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
-.tabs button{flex:0 0 auto}
-/* Рядки списків замість широких таблиць: учні, тести, завдання */
-.item{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px dashed var(--grid)}
-.item:first-of-type{border-top:0}
-.meta{font-size:13px;color:var(--mut)}
-.item .bar{margin:0}
-details.card>summary{font-size:20px;font-weight:700;cursor:pointer}
-details.card[open]>summary{margin-bottom:8px}
-details>summary{cursor:pointer}
-/* Тести */
-.q{padding:10px 0;border-top:1px dashed var(--grid)}
-.q.good{border-left:4px solid var(--green);padding-left:10px}
-.q.badq{border-left:4px solid var(--red);padding-left:10px}
-.opt{display:flex;gap:8px;align-items:center;padding:6px 0;margin:0}

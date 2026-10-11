@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Codele — електронний клас з інформатики</title>
 <!-- Стилі винесено в css/style.css. Число після ?v= змінюй при кожному оновленні файлів, щоб браузер не показував старі. -->
-<link rel="stylesheet" href="css/style.css?v=20261007a">
+<link rel="stylesheet" href="css/style.css?v=20261008a">
 <!-- Бібліотека для роботи з базою Supabase (акаунти, завдання, тести). -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
@@ -56,6 +56,7 @@
   <div id="appBody" hidden>
     <!-- Вкладки: теми, практика, марафон, завдання від вчителя, тести. -->
     <div class="tabs" id="tabs">
+      <button id="tab_panel" class="ghost" hidden>👨‍🏫 Панель</button>
       <button id="tab_topics">Теми</button>
       <button id="tab_practice" class="ghost">Практика</button>
       <button id="tab_marathon" class="ghost">Марафон</button>
@@ -120,21 +121,22 @@
   <!-- Панель вчителя: класи, учні, завдання, оцінки, кроки розв'язування. Доступна лише вчителю. -->
   <section id="tPanel" hidden>
     <div class="top"><h2 id="tTitle">Панель вчителя</h2><button id="tBack" class="ghost">← Назад</button></div>
+    <div class="tabs" id="tNav"></div>
     <div id="tBody"></div>
   </section>
 </main>
 
 
 <!-- Скрипти підключаються по порядку: дані, основа, Python у фоні, меню, акаунти, малюнки, тести, панель вчителя, старт. -->
-<script>const ASSET_V="20261007a";</script>
-<script src="js/data.js?v=20261007a"></script>
-<script src="js/core.js?v=20261007a"></script>
-<script src="js/worker.js?v=20261007a"></script>
-<script src="js/menu.js?v=20261007a"></script>
-<script src="js/auth.js?v=20261007a"></script>
-<script src="js/preview.js?v=20261007a"></script>
-<script src="js/tests.js?v=20261007a"></script>
-<script src="js/teacher.js?v=20261007a"></script>
-<script src="js/main.js?v=20261007a"></script>
+<script>const ASSET_V="20261008a";</script>
+<script src="js/data.js?v=20261008a"></script>
+<script src="js/core.js?v=20261008a"></script>
+<script src="js/worker.js?v=20261008a"></script>
+<script src="js/menu.js?v=20261008a"></script>
+<script src="js/auth.js?v=20261008a"></script>
+<script src="js/preview.js?v=20261008a"></script>
+<script src="js/tests.js?v=20261008a"></script>
+<script src="js/teacher.js?v=20261008a"></script>
+<script src="js/main.js?v=20261008a"></script>
 </body>
 </html>

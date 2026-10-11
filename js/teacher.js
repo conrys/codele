@@ -1,6 +1,6 @@
 // ===================== Панель вчителя =====================
 // Тут видно лише те, що дозволяють правила доступу бази: учнів і дані власних класів.
-const T={classId:null,studentId:null,testId:null,note:""};
+const T={classId:null,studentId:null,testId:null,sub:null,page:"overview",search:"",filter:{type:"all",ungraded:true,sid:""},note:""};
 let TD=null;                               // кеш даних вчителя
 function download(name,text,type){
   const a=document.createElement("a");
@@ -40,11 +40,12 @@ async function loadTeacher(){
     sb.from("grades").select("id,student_id,task_ref,task_title,score,comment,created_at").order("created_at",{ascending:false}),
     sb.from("teacher_tasks").select("id,class_id,title,topic,spec,opens_at,closes_at").order("created_at",{ascending:false}),
     sb.from("marathon_results").select("user_id,ms,tasks,finished_at").order("finished_at",{ascending:false}),
-    sb.from("tests").select("id,class_id,title,topic,max_attempts,time_limit_min,show_answers,opens_at,closes_at,spec").order("created_at",{ascending:false})
+    sb.from("tests").select("id,class_id,title,topic,max_attempts,time_limit_min,show_answers,opens_at,closes_at,spec").order("created_at",{ascending:false}),
+    sb.from("test_attempts").select("id,test_id,user_id,started_at,finished_at,score,max_score").order("finished_at",{ascending:false}).limit(2000)
   ]);
   const bad=q.find(x=>x.error);
   if(bad){box.textContent="Не вдалося завантажити дані: "+bad.error.message;return}
-  TD={classes:q[0].data,students:q[1].data,runs:q[2].data,grades:q[3].data,tasks:q[4].data,marathon:q[5].data,tests:q[6].data};
+  TD={classes:q[0].data,students:q[1].data,runs:q[2].data,grades:q[3].data,tasks:q[4].data,marathon:q[5].data,tests:q[6].data,attempts:(q[7].data||[]).filter(a=>a.finished_at)};
   if(!TD.classes.some(c=>c.id===T.classId))T.classId=TD.classes.length?TD.classes[0].id:null;
   drawTeacher();
 }
@@ -64,98 +65,325 @@ function statsOf(uid){
 }
 const dt=x=>x?new Date(x).toLocaleString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"–";
 
+// ---------- Сторінки панелі: Огляд, Перевірка, Учні, Керування ----------
+// До будь-якої роботи учня — не більше 3–4 натискань: Панель → Перевірка → робота → оцінка.
+const PAGES=[["overview","Огляд"],["review","Перевірка"],["students","Учні"],["manage","Керування"]];
+const ago=x=>{
+  if(!x)return "–";
+  const m=Math.round((Date.now()-new Date(x).getTime())/60000);
+  if(m<1)return "щойно";
+  if(m<60)return m+" хв тому";
+  const h=Math.round(m/60);
+  if(h<24)return h+" год тому";
+  const d=Math.round(h/24);
+  return d<7?d+" дн. тому":dt(x);
+};
+function setBackLabel(){$("tBack").textContent=(T.sub||T.studentId||T.testId)?"← Назад":"← На сайт"}
+function renderTeacherNav(){
+  const nav=$("tNav");nav.textContent="";
+  const inSub=T.sub||T.studentId||T.testId;
+  PAGES.forEach(p=>nav.append(btn(p[1],()=>{T.page=p[0];T.studentId=null;T.testId=null;T.sub=null;drawTeacher()},(!inSub&&T.page===p[0])?"":"ghost")));
+}
+// Кнопка «Назад»: з кроків — до того, звідки відкрили; з учня чи тесту — до списку; зі списку — на сайт
+function teacherBack(){
+  if(T.sub){const f=T.sub.back;T.sub=null;f();return}
+  if(T.studentId){T.studentId=null;drawTeacher();return}
+  if(T.testId){T.testId=null;drawTeacher();return}
+  hideTeacher();
+}
 function drawTeacher(){
+  renderTeacherNav();setBackLabel();
   if(T.studentId)return drawStudent();
   if(T.testId)return drawTestResults();
+  if(T.page==="review")return drawReview();
+  if(T.page==="students")return drawStudents();
+  if(T.page==="manage")return drawManage();
+  return drawOverview();
+}
+// Вибір класу (показується, лише якщо їх кілька). Повертає поточний клас.
+function classBar(box){
+  if(TD.classes.length>1){
+    const row=el("div",undefined,"tabs");
+    TD.classes.forEach(c=>row.append(btn(c.name,()=>{T.classId=c.id;drawTeacher()},c.id===T.classId?"":"ghost")));
+    box.append(row);
+  }
+  return TD.classes.find(c=>c.id===T.classId);
+}
+function noClass(box){
+  const w=el("div",undefined,"card");
+  w.append(el("h2","Класів не знайдено"));
+  w.append(el("p","Створи перший клас у розділі «Керування». Якщо клас уже є в базі, перевір, що його teacher_id збігається з твоїм акаунтом. Виконай у SQL Editor:","mut"));
+  w.append(el("pre","update public.classes\n   set teacher_id = (select id from public.profiles where nick = '"+me.nick+"')\n where join_code = 'CLASS8B';"));
+  box.append(w);
+}
+function classData(cur){
+  const studs=TD.students.filter(s=>s.class_id===cur.id), st={};
+  studs.forEach(s=>{st[s.id]=statsOf(s.id)});
+  return {studs:studs,st:st};
+}
+function avgGrade(uid){const g=TD.grades.filter(x=>x.student_id===uid);return g.length?g.reduce((a,x)=>a+x.score,0)/g.length:null}
+const gcls=v=>v>=10?"g-hi":v>=7?"g-mid":v>=4?"g-low":"g-bad";
+function gradeOfItem(it){return TD.grades.find(g=>g.student_id===it.uid&&g.task_ref===it.ref)||null}
+
+// Роботи для перевірки: здані тести й розв'язані (або розпочаті) завдання, найновіші зверху
+function reviewItems(cur){
+  const sids=new Set(TD.students.filter(s=>s.class_id===cur.id).map(s=>s.id));
+  const items=[];
+  (TD.attempts||[]).forEach(a=>{
+    const t=TD.tests.find(x=>x.id===a.test_id);
+    if(t&&sids.has(a.user_id))items.push({kind:"test",time:a.finished_at,uid:a.user_id,attempt:a,test:t,ref:"x:"+t.id});
+  });
+  const m={};
+  TD.runs.forEach(x=>{
+    if(!sids.has(x.user_id)||x.task_ref.startsWith("m:"))return;
+    const k=x.user_id+"|"+x.task_ref;
+    const e=m[k]||(m[k]={kind:"task",uid:x.user_id,ref:x.task_ref,runs:0,solved:false,time:null});
+    e.runs++;if(x.passed)e.solved=true;e.time=x.created_at;
+  });
+  Object.keys(m).forEach(k=>items.push(m[k]));
+  items.sort((a,b)=>String(b.time)>String(a.time)?1:-1);
+  return items;
+}
+
+// Форма швидкої оцінки: оцінка 1–12 і коментар
+function gradeForm(s,ref,title,after){
+  const wrap=el("div",undefined,"gform");
+  const old=TD.grades.find(g=>g.student_id===s.id&&g.task_ref===ref);
+  if(old)wrap.append(el("span","Поточна оцінка: "+old.score,"pill good"));
+  const sc=el("input");sc.type="number";sc.min=1;sc.max=12;sc.placeholder="1–12";
+  const cm=el("input");cm.type="text";cm.maxLength=500;cm.placeholder="Коментар (необов’язково)";
+  wrap.append(sc,cm,btn("Оцінити",async()=>{
+    const v=parseInt(sc.value,10);
+    if(!(v>=1&&v<=12)){toast("Оцінка має бути від 1 до 12.");return}
+    const r=await sb.from("grades").insert({student_id:s.id,teacher_id:me.id,task_ref:ref,task_title:title.slice(0,120),score:v,comment:cm.value.trim()||null});
+    if(r.error){toast("Не вдалося зберегти оцінку.");return}
+    const g=await sb.from("grades").select("id,student_id,task_ref,task_title,score,comment,created_at").order("created_at",{ascending:false});
+    if(g.data)TD.grades=g.data;
+    toast("Оцінку "+v+" збережено.");
+    if(after)after();
+  }));
+  return wrap;
+}
+
+function drawOverview(){
   $("tTitle").textContent="Панель вчителя";
   const box=$("tBody");box.textContent="";
-  const cur=TD.classes.find(c=>c.id===T.classId);
+  const cur=classBar(box);
+  if(T.note){box.append(el("div",T.note,"notice"));T.note=""}
+  if(!cur){noClass(box);return}
+  const d=classData(cur);
+  const today=new Date().toDateString();
+  const active=d.studs.filter(s=>d.st[s.id].last&&new Date(d.st[s.id].last).toDateString()===today).length;
+  const pending=reviewItems(cur).filter(i=>!gradeOfItem(i)).length;
+  const grid=el("div",undefined,"sgrid");
+  [["Учнів",d.studs.length,null],["Активні сьогодні",active,null],
+   ["Чекають на оцінку",pending,()=>{T.page="review";T.filter.ungraded=true;T.filter.type="all";T.filter.sid="";drawTeacher()}],
+   ["Код класу",cur.join_code,null]].forEach(x=>{
+    const b=el("div",undefined,"sbox"+(x[2]?" click":""));
+    b.append(el("b",String(x[1])),el("span",x[0]));
+    if(x[2])b.addEventListener("click",x[2]);
+    grid.append(b);
+  });
+  box.append(grid);
 
-  // --- Класи ---
-  const c1=el("div",undefined,"card");
-  c1.append(el("h2","Класи"));
-  if(T.note){c1.append(el("p",T.note));T.note=""}
-  const tabsRow=el("div",undefined,"tabs");
-  TD.classes.forEach(c=>tabsRow.append(btn(c.name,()=>{T.classId=c.id;drawTeacher()},c.id===T.classId?"":"ghost")));
-  c1.append(tabsRow);
-  if(cur){
-    c1.append(el("p","Код для реєстрації учнів: "+cur.join_code,"mut"));
-    const d=el("details");
-    d.append(el("summary","Налаштування класу"));
-    const rn=el("input");rn.type="text";rn.maxLength=40;rn.value=cur.name;
-    const lr=el("label","Назва класу");lr.append(rn);
-    const dd=el("input");dd.type="date";dd.value=cur.paste_mark_until||"";
-    const ld=el("label","Показувати учням значок «вставлено» до дати:");ld.append(dd);
-    d.append(lr,ld,btn("Зберегти",async()=>{
-      const nm=rn.value.trim();
-      if(!nm){T.note="Назва не може бути порожньою.";drawTeacher();return}
-      const patch={name:nm};
-      if(dd.value)patch.paste_mark_until=dd.value;
-      const r=await sb.from("classes").update(patch).eq("id",cur.id);
-      T.note=r.error?"Не вдалося зберегти.":"Збережено. Після вказаної дати учні не бачать значка «вставлено», а ти бачиш його завжди.";
-      if(!r.error){cur.name=nm;if(dd.value)cur.paste_mark_until=dd.value}
-      drawTeacher();
-    },"ghost"));
-    // Видалити можна лише порожній клас: так дані учнів не загубляться випадково
-    d.append(btn("Видалити клас",async()=>{
-      if(!confirm("Видалити клас «"+cur.name+"» разом з його завданнями, тестами й матеріалами? Учнів у класі не має бути."))return;
-      const r=await sb.rpc("delete_class",{p_id:cur.id});
-      if(r.error){
-        T.note=/not empty/.test(r.error.message)?"У класі ще є учні. Спочатку видали їхні акаунти (картка учня → «Керувати акаунтом»).":"Не вдалося видалити клас: "+r.error.message;
-        drawTeacher();return;
-      }
-      T.classId=null;T.note="Клас видалено.";loadTeacher();
-    },"ghost"));
-    c1.append(d);
+  // Таблиця лідерів: лише для вчителя. Перші три місця — медалі.
+  const c2=el("div",undefined,"card");
+  c2.append(el("h2","Таблиця лідерів"));
+  c2.append(el("p","Бачить лише вчитель. Більше розв’язаних завдань — вище, за рівності — менше запусків.","mut"));
+  const medals=["🥇","🥈","🥉"];
+  d.studs.slice().sort((a,b)=>d.st[b.id].solved.size-d.st[a.id].solved.size||d.st[a.id].runs-d.st[b.id].runs).forEach((s,i)=>{
+    const solved=d.st[s.id].solved.size;
+    const row=el("div",undefined,"lrow");
+    row.append(el("div",solved>0&&i<3?medals[i]:String(i+1),"rank"));
+    const info=el("div");
+    info.append(el("b",s.display_name+" ("+s.nick+")"));
+    info.append(el("div","Розв’язано "+solved+" з "+TASKS.length+" · запусків "+d.st[s.id].runs+" · "+ago(d.st[s.id].last),"meta"));
+    row.append(info,btn("Відкрити",()=>{T.studentId=s.id;drawTeacher()},"ghost"));
+    c2.append(row);
+  });
+  if(!d.studs.length)c2.append(el("p","У цьому класі ще немає учнів. Учні мають зареєструватися з кодом класу "+cur.join_code+". Якщо учень уже входив, а його тут немає, перевір у базі, що його class_id збігається з id цього класу.","mut"));
+  const ex=el("div",undefined,"bar");
+  ex.append(btn("Таблиця (.csv)",()=>{
+    const rows=[["Нік","Ім’я","Розв’язано","Запусків","Остання активність","Середня оцінка"]];
+    d.studs.forEach(s=>{const a=avgGrade(s.id);rows.push([s.nick,s.display_name,d.st[s.id].solved.size,d.st[s.id].runs,d.st[s.id].last||"",a===null?"":a.toFixed(1)])});
+    download("codele-class.csv","\ufeff"+rows.map(r=>r.map(csvCell).join(",")).join("\n"),"text/csv");
+  },"ghost"),btn("Зібрати дані для ШІ",()=>exportAI(d.studs),"ghost"));
+  c2.append(ex);
+  box.append(c2);
+}
+
+function drawReview(){
+  $("tTitle").textContent="Перевірка";
+  const box=$("tBody");box.textContent="";
+  const cur=classBar(box);
+  if(!cur){noClass(box);return}
+  const F=T.filter;
+  const types=el("div",undefined,"tabs");
+  [["all","Усе"],["test","Тести"],["task","Завдання"]].forEach(x=>types.append(btn(x[1],()=>{F.type=x[0];drawReview()},F.type===x[0]?"":"ghost")));
+  box.append(types);
+  const bar=el("div",undefined,"bar");
+  const ch=el("input");ch.type="checkbox";ch.checked=F.ungraded;
+  ch.addEventListener("change",()=>{F.ungraded=ch.checked;drawReview()});
+  const lb=el("label",undefined,"opt");lb.append(ch,el("span","Лише без оцінки"));
+  const sel=el("select");
+  sel.append(new Option("Усі учні",""));
+  TD.students.filter(s=>s.class_id===cur.id).forEach(s=>sel.append(new Option(s.display_name,s.id)));
+  sel.value=F.sid;
+  sel.addEventListener("change",()=>{F.sid=sel.value;drawReview()});
+  bar.append(lb,sel);box.append(bar);
+  const items=reviewItems(cur).filter(i=>(F.type==="all"||F.type===i.kind)&&(!F.sid||F.sid===i.uid)&&(!F.ungraded||!gradeOfItem(i)));
+  const c=el("div",undefined,"card");
+  c.append(el("h2","Роботи · "+items.length));
+  if(!items.length)c.append(el("p","Усе перевірено або робіт ще немає.","mut"));
+  items.slice(0,100).forEach(it=>{
+    const s=TD.students.find(x=>x.id===it.uid);
+    const row=el("div",undefined,"item click");
+    const info=el("div");
+    info.append(el("b",(it.kind==="test"?"📝 ":"💻 ")+(it.kind==="test"?it.test.title:titleOf(it.ref))));
+    const detail=it.kind==="test"
+      ?"результат "+fmtNum(it.attempt.score)+" з "+fmtNum(it.attempt.max_score)+" ("+pct(it.attempt.score,it.attempt.max_score)+"%)"
+      :(it.solved?"розв’язано":"не розв’язано")+" · запусків "+it.runs;
+    info.append(el("div",s.display_name+" · "+detail+" · "+ago(it.time),"meta"));
+    const g=gradeOfItem(it);
+    row.append(info,el("span",g?"Оцінка "+g.score:"Оцінити →","pill "+(g?"good":"warn")));
+    row.addEventListener("click",()=>{if(it.kind==="test")showAttemptReview(it.attempt,s,it.test);else showSteps(s,it.ref,()=>drawReview())});
+    c.append(row);
+  });
+  box.append(c);
+}
+
+function drawStudents(){
+  $("tTitle").textContent="Учні";
+  const box=$("tBody");box.textContent="";
+  const cur=classBar(box);
+  if(!cur){noClass(box);return}
+  const d=classData(cur);
+  const q=el("input");q.type="text";q.placeholder="Пошук за ім’ям або ніком";q.value=T.search||"";
+  const list=el("div",undefined,"card");
+  function fill(){
+    list.textContent="";
+    const f=(q.value||"").toLowerCase();
+    d.studs.filter(s=>!f||(s.display_name+" "+s.nick).toLowerCase().includes(f)).forEach(s=>{
+      const row=el("div",undefined,"item click");
+      const info=el("div");
+      info.append(el("b",s.display_name+" ("+s.nick+")"));
+      const ag=avgGrade(s.id);
+      info.append(el("div","Розв’язано "+d.st[s.id].solved.size+" з "+TASKS.length+" · запусків "+d.st[s.id].runs+" · "+ago(d.st[s.id].last)+(ag!==null?" · середня "+ag.toFixed(1):""),"meta"));
+      row.append(info,el("span","›","rank"));
+      row.addEventListener("click",()=>{T.studentId=s.id;drawTeacher()});
+      list.append(row);
+    });
+    if(!list.children.length)list.append(el("p","Нікого не знайдено.","mut"));
   }
-  const nd=el("details");
-  nd.append(el("summary","Створити новий клас"));
-  const nameIn=el("input");nameIn.type="text";nameIn.maxLength=40;nameIn.placeholder="Назва нового класу, наприклад 8-А";
-  nd.append(nameIn,btn("Створити клас",async()=>{
+  q.addEventListener("input",()=>{T.search=q.value;fill()});
+  box.append(q);fill();box.append(list);
+}
+
+function drawManage(){
+  $("tTitle").textContent="Керування";
+  const box=$("tBody");box.textContent="";
+  const cur=classBar(box);
+  if(T.note){box.append(el("div",T.note,"notice"));T.note=""}
+  if(!cur){noClass(box);newClassCard(box);return}
+  drawTaskManager(box,cur);
+  drawTestManager(box,cur);
+  classSettingsCard(box,cur);
+  newClassCard(box);
+}
+function newClassCard(box){
+  const c=el("details",undefined,"card");
+  c.append(el("summary","Створити новий клас"));
+  const nameIn=el("input");nameIn.type="text";nameIn.maxLength=40;nameIn.placeholder="Назва класу, наприклад 8-А";
+  c.append(nameIn,btn("Створити клас",async()=>{
     const r=await sb.rpc("create_class",{p_name:nameIn.value});
     T.note=r.error?"Не вдалося створити клас.":"Клас створено. Код для учнів: "+r.data;
     loadTeacher();
   }));
-  c1.append(nd);
-  box.append(c1);
-  if(!cur){
-    const w=el("div",undefined,"card");
-    w.append(el("h2","Класів не знайдено"));
-    w.append(el("p","Створи перший клас або, якщо клас уже є в базі, перевір, що його teacher_id збігається з твоїм акаунтом. Виконай у SQL Editor:","mut"));
-    w.append(el("pre","update public.classes\n   set teacher_id = (select id from public.profiles where nick = '"+me.nick+"')\n where join_code = 'CLASS8B';"));
-    box.append(w);
-    return;
+  box.append(c);
+}
+function classSettingsCard(box,cur){
+  const c=el("details",undefined,"card");
+  c.append(el("summary","Налаштування класу «"+cur.name+"»"));
+  c.append(el("p","Код для реєстрації учнів: "+cur.join_code,"mut"));
+  const rn=el("input");rn.type="text";rn.maxLength=40;rn.value=cur.name;
+  const lr=el("label","Назва класу");lr.append(rn);
+  const dd=el("input");dd.type="date";dd.value=cur.paste_mark_until||"";
+  const ld=el("label","Показувати учням значок «вставлено» до дати:");ld.append(dd);
+  c.append(lr,ld,btn("Зберегти",async()=>{
+    const nm=rn.value.trim();
+    if(!nm){T.note="Назва не може бути порожньою.";drawTeacher();return}
+    const patch={name:nm};
+    if(dd.value)patch.paste_mark_until=dd.value;
+    const r=await sb.from("classes").update(patch).eq("id",cur.id);
+    T.note=r.error?"Не вдалося зберегти.":"Збережено. Після вказаної дати учні не бачать значка «вставлено», а ти бачиш його завжди.";
+    if(!r.error){cur.name=nm;if(dd.value)cur.paste_mark_until=dd.value}
+    drawTeacher();
+  }));
+  // Видалити можна лише порожній клас: так дані учнів не загубляться випадково
+  c.append(btn("Видалити клас",async()=>{
+    if(!confirm("Видалити клас «"+cur.name+"» разом з його завданнями, тестами й матеріалами? Учнів у класі не має бути."))return;
+    const r=await sb.rpc("delete_class",{p_id:cur.id});
+    if(r.error){
+      T.note=/not empty/.test(r.error.message)?"У класі ще є учні. Спочатку видали їхні акаунти (розділ «Учні» → учень → «Керувати акаунтом»).":"Не вдалося видалити клас: "+r.error.message;
+      drawTeacher();return;
+    }
+    T.classId=null;T.note="Клас видалено.";loadTeacher();
+  },"ghost danger"));
+  box.append(c);
+}
+
+// ---------- JSON від ШІ: розбір із виправленням типових помилок ----------
+// Найчастіша помилка ШІ: подвійні лапки всередині тексту (наприклад, у коді Python) без екранування.
+function repairQuotes(s){
+  let out="",inStr=false;
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(!inStr){out+=ch;if(ch==='"')inStr=true;continue}
+    if(ch==="\\"){out+=ch+(s[i+1]||"");i++;continue}
+    if(ch==="\n"){out+="\\n";continue}            // справжній перенос рядка всередині тексту
+    if(ch==="\r")continue;
+    if(ch==="\t"){out+="\\t";continue}
+    if(ch==='"'){
+      let j=i+1;while(j<s.length&&/\s/.test(s[j]))j++;
+      const nx=s[j];
+      // закриваюча лапка: далі йде , } ] : або кінець. Інакше це лапка всередині тексту.
+      if(nx===undefined||nx===","||nx==="}"||nx==="]"||nx===":"){out+=ch;inStr=false}
+      else out+='\\"';
+      continue;
+    }
+    out+=ch;
   }
-
-  const studs=TD.students.filter(s=>s.class_id===cur.id);
-  const st={};studs.forEach(s=>{st[s.id]=statsOf(s.id)});
-
-  // --- Таблиця лідерів: лише для вчителя (рядки-картки, щоб було зручно на телефоні) ---
-  const c2=el("div",undefined,"card");
-  c2.append(el("h2","Таблиця лідерів"));
-  c2.append(el("p","Бачить лише вчитель. Сортування: більше розв’язаних завдань, потім менше запусків.","mut"));
-  studs.slice().sort((a,b)=>st[b.id].solved.size-st[a.id].solved.size||st[a.id].runs-st[b.id].runs).forEach((s,i)=>{
-    const g=TD.grades.find(x=>x.student_id===s.id);
-    const it=el("div",undefined,"item");
-    const info=el("div");
-    info.append(el("b",(i+1)+". "+s.display_name+" ("+s.nick+")"));
-    info.append(el("div","Розв’язано "+st[s.id].solved.size+" з "+TASKS.length+" · запусків "+st[s.id].runs+" · остання активність: "+dt(st[s.id].last)+(g?" · оцінка "+g.score:""),"meta"));
-    it.append(info,btn("Відкрити",()=>{T.studentId=s.id;drawTeacher()},"ghost"));
-    c2.append(it);
+  return out;
+}
+function jsonErrorText(s,e){
+  const l=/line (\d+) column (\d+)/.exec(e.message), p=/position (\d+)/.exec(e.message);
+  let where="";
+  if(l){const line=s.split("\n")[+l[1]-1]||"";where=" (рядок "+l[1]+", стовпець "+l[2]+": «"+line.trim().slice(0,70)+"»)"}
+  else if(p)where=" (позиція "+p[1]+")";
+  return "Це не схоже на правильний JSON"+where+". Найчастіше причина: у тексті є подвійні лапки (їх треба замінити на одинарні або «ялинки») чи пропущена кома.";
+}
+function parseLenient(text){
+  const s=String(text).trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"");
+  try{return {value:JSON.parse(s),repaired:false}}
+  catch(e1){
+    try{return {value:JSON.parse(repairQuotes(s)),repaired:true}}
+    catch(e2){return {error:jsonErrorText(s,e1)}}
+  }
+}
+// Підказка під полем: чи правильний JSON (перевіряється під час вводу)
+function jsonHint(ta,hint,check){
+  let t;
+  ta.addEventListener("input",()=>{
+    clearTimeout(t);
+    t=setTimeout(()=>{
+      if(!ta.value.trim()){hint.textContent="";hint.className="mut";return}
+      const r=parseLenient(ta.value);
+      if(r.error){hint.textContent="✗ "+r.error;hint.className="err";return}
+      const extra=check?check(r.value):"";
+      hint.textContent="✓ JSON правильний"+(r.repaired?" (лапки в тексті виправлено автоматично)":"")+(extra?" · "+extra:"");
+      hint.className="mut";
+    },300);
   });
-  if(!studs.length)c2.append(el("p","У цьому класі ще немає учнів. Учні мають зареєструватися з кодом класу "+cur.join_code+". Якщо учень уже входив, а його тут немає, перевір у базі, що його class_id збігається з id цього класу.","mut"));
-  const ex=el("div",undefined,"bar");
-  ex.append(btn("Таблиця (.csv)",()=>{
-    const rows=[["Нік","Ім’я","Розв’язано","Запусків","Остання активність","Остання оцінка"]];
-    studs.forEach(s=>{const g=TD.grades.find(x=>x.student_id===s.id);rows.push([s.nick,s.display_name,st[s.id].solved.size,st[s.id].runs,st[s.id].last||"",g?g.score:""])});
-    download("codele-class.csv","\ufeff"+rows.map(r=>r.map(csvCell).join(",")).join("\n"),"text/csv");
-  },"ghost"),btn("Зібрати дані для ШІ",()=>exportAI(studs),"ghost"));
-  c2.append(ex);
-  box.append(c2);
-
-  // --- Завдання й тести від вчителя ---
-  drawTaskManager(box,cur);
-  drawTestManager(box,cur);
 }
 
 // ---------- Завдання від вчителя: імпорт із JSON ----------
@@ -171,6 +399,7 @@ const TASK_PROMPT=`Створи завдання з програмування �
 - cases: ЗАМІСТЬ expect, якщо програма читає дані: масив перевірок {"stdin": ["перший рядок введення", "другий"], "expect": "очікуваний вивід"}
 - uses: необов’язково, які конструкції мають бути в коді: "For", "While", "If", "FunctionDef", "ClassDef", "Match"
 - params: необов’язково, щоб кожен учень мав свої значення. У text, expect і stdin пиши {{назва}}, а в params вкажи значення: {"n": [3, 4, 5]} або {"a": {"min": 2, "max": 9}}. Значення мають бути такими, щоб expect можна було записати без обчислень.
+Важливо про формат: у всіх текстах НЕ використовуй подвійні лапки (замість них — одинарні ' або «ялинки»). Перенос рядка в коді записуй як \n, а код Python пиши з одинарними лапками.
 Приклад:
 {"title":"Привітання","topic":"Змінні","text":"Прочитай ім’я і виведи: Привіт, ім’я!","cases":[{"stdin":["Оля"],"expect":"Привіт, Оля!"},{"stdin":["Макс"],"expect":"Привіт, Макс!"}]}
 Моє завдання: `;
@@ -183,7 +412,8 @@ function drawTaskManager(box,cur){
     try{await navigator.clipboard.writeText(TASK_PROMPT);T.note="Промпт скопійовано.";}catch(e){T.note="Не вдалося скопіювати.";}
     toast(T.note);T.note="";
   },"ghost"));
-  const ta=el("textarea");ta.placeholder="Встав JSON завдання";ta.style.cssText="width:100%;min-height:130px;font-family:ui-monospace,monospace;margin-top:8px";
+  const ta=el("textarea",undefined,"json");ta.placeholder="Встав JSON завдання";
+  const jh=el("p","","mut");jsonHint(ta,jh,v=>v&&typeof v.title==="string"?"«"+v.title+"»":"");
   const o=el("input");o.type="datetime-local";
   const lo=el("label","Відкрити:");lo.append(o);
   const cl=el("input");cl.type="datetime-local";
@@ -191,9 +421,10 @@ function drawTaskManager(box,cur){
   const msg=el("p","","mut");
   const local=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
   o.value=local(new Date());
-  c.append(ta,lo,lc,btn("Додати завдання",async()=>{
-    let spec;
-    try{spec=JSON.parse(ta.value)}catch(e){msg.textContent="Це не схоже на правильний JSON: "+e.message;return}
+  c.append(ta,jh,lo,lc,btn("Додати завдання",async()=>{
+    const pr=parseLenient(ta.value);
+    if(pr.error){msg.textContent=pr.error;return}
+    const spec=pr.value;
     if(!spec||typeof spec!=="object"||Array.isArray(spec)){msg.textContent="Потрібен один JSON-об’єкт.";return}
     if(typeof spec.title!=="string"||!spec.title.trim()||spec.title.length>80){msg.textContent="Потрібне поле title (до 80 символів).";return}
     if(typeof spec.text!=="string"||!spec.text.trim()){msg.textContent="Потрібне поле text (умова).";return}
@@ -214,7 +445,7 @@ function drawTaskManager(box,cur){
       p.append(btn("Видалити",async()=>{
         if(!confirm("Видалити завдання «"+t.title+"»?"))return;
         await sb.from("teacher_tasks").delete().eq("id",t.id);loadTeacher();
-      },"ghost"));
+      },"ghost danger"));
       c.append(p);
     });
   }
@@ -255,9 +486,12 @@ async function drawStudent(){
     TD.grades=g.data||TD.grades;drawStudent();
   }),msg);
   TD.grades.filter(g=>g.student_id===s.id).forEach(g=>{
-    const p=el("div",undefined,"item");
-    p.append(el("span",g.score+" · "+(g.task_title||(g.task_ref?titleOf(g.task_ref):"загальна"))+(g.comment?" — "+g.comment:"")+" · "+dt(g.created_at)));
-    p.append(btn("×",async()=>{await sb.from("grades").delete().eq("id",g.id);TD.grades=TD.grades.filter(x=>x.id!==g.id);drawStudent()},"ghost"));
+    const p=el("div",undefined,"grade");
+    p.append(el("div",String(g.score),"gscore "+gcls(g.score)));
+    const m=el("div",undefined,"gmeta");
+    m.append(el("b",g.task_title||(g.task_ref?titleOf(g.task_ref):"Загальна оцінка")));
+    m.append(el("span",(g.comment?g.comment+" · ":"")+dt(g.created_at),"meta"));
+    p.append(m,btn("×",async()=>{await sb.from("grades").delete().eq("id",g.id);TD.grades=TD.grades.filter(x=>x.id!==g.id);drawStudent()},"ghost danger"));
     c2.append(p);
   });
   box.append(c2);
@@ -305,7 +539,7 @@ function lineDiff(a,b){
   return out;
 }
 let playTimer=null;
-async function showSteps(s,r){
+async function showSteps(s,r,back){
   const box=$("tBody");box.textContent="Завантажую…";
   const q=await sb.from("runs").select("*").eq("user_id",s.id).eq("task_ref",r).order("created_at");
   const runs=q.data||[];
@@ -319,7 +553,8 @@ async function showSteps(s,r){
     head.append(el("p","Умова цього учня: "+(inst.text||""),"mut"));
     if(inst.pseudo)head.append(el("pre",inst.pseudo));
   }
-  head.append(btn("← До учня",()=>{clearInterval(playTimer);drawStudent()},"ghost"));
+  T.sub={back:back||(()=>drawStudent())};setBackLabel();
+  head.append(btn("← Назад",()=>{clearInterval(playTimer);teacherBack()},"ghost"));
   box.append(head);
   if(!runs.length){box.append(el("p","Запусків немає.","mut"));return}
   const view=el("div",undefined,"card");
@@ -345,6 +580,10 @@ async function showSteps(s,r){
     view.append(bar,el("p","Зелені рядки з «+» додано на цьому кроці, червоні з «−» видалено.","mut"));
   }
   draw();
+  const gc=el("div",undefined,"card");
+  gc.append(el("h2","Оцінка"));
+  gc.append(gradeForm(s,r,titleOf(r),()=>showSteps(s,r,T.sub?T.sub.back:back)));
+  box.append(gc);
 }
 
 // ---------- Дані для оцінювання ШІ ----------
@@ -416,7 +655,7 @@ function manageStudent(s){
     const r=await sb.rpc("teacher_delete_student",{p_uid:s.id});
     if(r.error){msg.textContent="Не вдалося видалити.";return}
     dlg.close();T.studentId=null;loadTeacher();
-  },"ghost"));
+  },"ghost danger"));
   dlg.append(msg,btn("Закрити",()=>{dlg.close();drawTeacher()}));
   dlg.showModal();
 }

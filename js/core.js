@@ -128,6 +128,9 @@ function listTopics(box){
     const solved=list.filter(b=>(prog[b.ref]||{}).solved).length;
     const c=el("div",undefined,"card");
     c.append(el("h2",t.name+" · "+solved+" з "+list.length));
+    const pg=el("div",undefined,"progress"),sp=el("span");
+    sp.style.width=Math.round(solved/list.length*100)+"%";
+    pg.append(sp);c.append(pg);
     if(t.intro){
       const d=el("details");
       d.append(el("summary","Як працювати з цією темою"));

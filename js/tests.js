@@ -142,7 +142,13 @@ function fmtCorrect(q,ans){
   if(q.type==="multiple")return (ans||[]).map(k=>q.options[k]).join(", ");
   return (ans||[]).join(" / ");
 }
+function renderQMap(box,detail){
+  const m=el("div",undefined,"qmap");
+  detail.forEach((d,i)=>m.append(el("span",String(i+1),d.ok?"y":"n")));
+  box.append(m);
+}
 function renderReview(box,qs,answers,detail){
+  renderQMap(box,detail);
   qs.forEach((q,i)=>{
     const d=detail[i]||{};
     const wrap=el("div",undefined,"q "+(d.ok?"good":"badq"));
@@ -193,6 +199,7 @@ const TEST_PROMPT=`Створи тест для учнів 8 класу з ін�
   - answer: для single — номер правильного варіанта (з нуля); для multiple — масив номерів правильних варіантів; для short і code — масив допустимих відповідей-рядків, наприклад ["14", "14.0"]
   - points: бали за питання (необов’язково, за замовчуванням 1)
   - explain: пояснення правильної відповіді (необов’язково)
+Важливо про формат: у всіх текстах НЕ використовуй подвійні лапки (замість них — одинарні ' або «ялинки»). Перенос рядка в коді записуй як \n, а код Python пиши з одинарними лапками.
 Приклад:
 {"title":"Цикли: перевірка","questions":[{"type":"single","text":"Скільки разів виконається for i in range(3)?","options":["2","3","4"],"answer":1,"explain":"range(3) дає 0, 1, 2"},{"type":"multiple","text":"Які слова є ключовими в Python?","options":["for","loop","while"],"answer":[0,2]},{"type":"short","text":"Яка функція виводить текст на екран?","answer":["print","print()"]},{"type":"code","text":"Що виведе код?","code":"print(2 + 3 * 4)","answer":["14"]}]}
 Тема мого тесту: `;
@@ -204,8 +211,8 @@ function drawTestManager(box,cur){
   c.append(btn("Скопіювати промпт для ШІ",async()=>{
     try{await navigator.clipboard.writeText(TEST_PROMPT);toast("Промпт скопійовано.")}catch(e){toast("Не вдалося скопіювати.")}
   },"ghost"));
-  const ta=el("textarea");ta.placeholder="Встав JSON тесту";
-  ta.style.cssText="width:100%;min-height:130px;font-family:ui-monospace,monospace;margin-top:8px";
+  const ta=el("textarea",undefined,"json");ta.placeholder="Встав JSON тесту";
+  const jh=el("p","","mut");jsonHint(ta,jh,v=>v&&Array.isArray(v.questions)?v.questions.length+" питань":"");
   const att=el("input");att.type="number";att.min=1;att.max=20;att.value=1;
   const la=el("label","Скільки спроб дозволено:");la.append(att);
   const tm=el("input");tm.type="number";tm.min=1;tm.max=240;tm.placeholder="без обмеження";
@@ -219,9 +226,10 @@ function drawTestManager(box,cur){
   const local=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
   o.value=local(new Date());
   const msg=el("p","","mut");
-  c.append(ta,la,lt,ls,lo,lc,btn("Імпортувати тест",async()=>{
-    let spec;
-    try{spec=JSON.parse(ta.value)}catch(e){msg.textContent="Це не схоже на правильний JSON: "+e.message;return}
+  c.append(ta,jh,la,lt,ls,lo,lc,btn("Імпортувати тест",async()=>{
+    const pr=parseLenient(ta.value);
+    if(pr.error){msg.textContent=pr.error;return}
+    const spec=pr.value;
     if(!spec||typeof spec!=="object"||Array.isArray(spec)){msg.textContent="Потрібен один JSON-об’єкт.";return}
     const r=await sb.rpc("create_test",{p_class:cur.id,p_spec:spec,
       p_opens:new Date(o.value||Date.now()).toISOString(),p_closes:cl.value?new Date(cl.value).toISOString():null,
@@ -243,7 +251,7 @@ function drawTestManager(box,cur){
         btn("Видалити",async()=>{
           if(!confirm("Видалити тест «"+t.title+"» разом з усіма спробами учнів?"))return;
           await sb.from("tests").delete().eq("id",t.id);loadTeacher();
-        },"ghost"));
+        },"ghost danger"));
       it.append(bar);
       c.append(it);
     });
@@ -288,13 +296,15 @@ async function drawTestResults(){
 async function showAttemptReview(a,s,t){
   const v=await sb.rpc("review_attempt",{p_attempt:a.id});
   const dlg=$("tDlg");dlg.textContent="";
+  dlg.append(btn("Закрити",()=>dlg.close(),"ghost"));
   dlg.append(el("h2",s.display_name+" · "+t.title));
   if(v.error){dlg.append(el("p","Не вдалося отримати розбір.","mut"))}
   else{
     dlg.append(el("p","Результат: "+fmtNum(v.data.score)+" з "+fmtNum(v.data.max)+" ("+pct(v.data.score,v.data.max)+"%)","mut"));
+    // Оцінка прямо тут, без зайвих переходів
+    dlg.append(gradeForm(s,"x:"+t.id,"Тест: "+t.title,()=>{if(T.page==="review"&&!T.studentId&&!T.testId&&!T.sub)drawReview()}));
     if(v.data.detail)renderReview(dlg,v.data.questions||[],v.data.answers||{},v.data.detail);
   }
   dlg.append(btn("Закрити",()=>dlg.close()));
   dlg.showModal();
 }
-
