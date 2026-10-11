@@ -161,6 +161,49 @@ BONUS.forEach(t=>{t.id=t.fn});
 const ALL_TASKS=OLD_TASKS.concat(NEW,BONUS);
 const TASKS=Object.keys(TOPIC_OF).map(id=>{const t=ALL_TASKS.find(x=>x.id===id);t.topic=TOPIC_OF[id];t.ref="b:"+id;return t}).filter(Boolean);
 
+// Коротка підказка з операторів і синтаксису для кожного вбудованого завдання.
+const SYNTAX_HINTS={
+ hello:'print("текст") — текст для print записуй у лапках.',
+ print_many:'print("текст", число) — кілька значень розділяй комами.',
+ v_assign:'name = value — оператор = присвоює значення; print(name) виводить його.',
+ v_types:'print(type(value)) — type() визначає тип значення.',
+ v_concat:'print(first, second) — print() поставить між значеннями пробіл.',
+ v_input:'name = input()\nprint("Привіт, " + name + "!") — + склеює текст із введеним ім’ям.',
+ m_expr:'print((a + b) * c) — + додає, * множить, дужки задають порядок.',
+ m_divmod:'print(a // b, a % b) — // дає цілу частину, % — остачу.',
+ m_power:'print(a ** n) — оператор ** підносить число до степеня.',
+ m_rect:'a = int(input())\nb = int(input())\nprint(a * b) — int() перетворює введення на число.',
+ m_sum3:'a = int(input())\nb = int(input())\nc = int(input())\nprint(a + b + c)',
+ c_sign:'if умова:\n    ...\nelif інша_умова:\n    ...\nelse:\n    ... — після умови став : і зроби відступ.',
+ c_even:'if n % 2 == 0: — % дає остачу; парне число має остачу 0.',
+ c_max:'if a > b: — > порівнює числа; для рівності використай ==.',
+ c_grade:'if 1 <= n <= 3:\n    ...\nelif 4 <= n <= 6:\n    ... — <= перевіряє межу включно.',
+ l_count:'for i in range(1, n + 1):\n    print(i) — верхню межу range() не включено.',
+ l_sum:'total = 0\nfor i in range(1, n + 1):\n    total += i — += додає число до змінної.',
+ l_down:'while n > 0:\n    print(n)\n    n -= 1 — -= зменшує число на 1.',
+ l_stars:'for i in range(1, n + 1):\n    print("*" * i) — * повторює рядок задану кількість разів.',
+ p_sum:'a = int(input())\nb = int(input())\ns = a + b\nprint(s) — ← у псевдокоді означає присвоєння =.',
+ p_max:'if a > b:\n    print(a)\nelse:\n    print(b) — після умови став : і зроби відступ.',
+ p_loop:'n = int(input())\nfor i in range(n):\n    print("Привіт") — range(n) повторює блок n разів.',
+ t_square:'import turtle\nt = turtle.Turtle()\nt.forward(100)\nt.left(90) — forward() рухає, left() повертає.',
+ t_loop:'for i in range(4):\n    t.forward(100)\n    t.left(90) — відступ позначає тіло циклу.',
+ t_triangle:'t.color("red")\nfor i in range(3):\n    t.forward(80)\n    t.left(120) — кут повороту: 360 / 3.',
+ tk_window:'root = tk.Tk()\ntk.Label(root, text="Привіт").pack()\nroot.mainloop() — pack() показує віджет.',
+ tk_button:'def click():\n    ...\ntk.Button(root, text="Натисни", command=click) — у command назву функції пишуть без ().',
+ tk_entry:'name = entry.get() — get() читає текст із поля вводу.',
+ class_object:'class Cat:\n    pass\ntom = Cat()\nprint(isinstance(tom, Cat)) — об’єкт створюється викликом класу з ().',
+ class_attr:'class Dog:\n    name = "Рекс"\nprint(Dog.name) — крапка звертається до атрибута класу.',
+ object_attr:'d = Dog()\nd.name = "Рекс"\nprint(d.name) — крапка задає або читає атрибут об’єкта.',
+ two_objects:'a = Dog()\nb = Dog()\nprint(a.name, b.name) — кожен виклик Dog() створює окремий об’єкт.',
+ method:'class Dog:\n    def speak(self):\n        print("Гав!")\nd = Dog()\nd.speak() — метод викликають через об’єкт і ().',
+ count_vowels:'for letter in s.lower():\n    if letter in "aeiou":\n        count += 1 — in перевіряє, чи є символ у рядку.',
+ digit_sum:'last = n % 10\nn = n // 10 — % дістає останню цифру, // відкидає її.',
+ is_palindrome:'s = s.lower()\nreturn s == s[::-1] — == порівнює, [::-1] перевертає рядок.',
+ second_max:'values = sorted(set(nums))\nreturn values[-2] — set() прибирає повтори, [-2] бере передостанній елемент.',
+ count_primes:'if n % d == 0:\n    ... — % == 0 означає, що n ділиться на d без остачі.'
+};
+TASKS.forEach(t=>{t.syntaxHint=SYNTAX_HINTS[t.id]});
+
 // Назви завдань: короткі іменникові фрази й номер у темі (1.1, 1.2 …). Скрізь показується label.
 const TITLES={hello:"Перший print",print_many:"Кілька значень",v_assign:"Створення змінної",v_types:"Тип даних",v_concat:"Склеювання рядків",v_input:"Привітання через input",
  m_expr:"Вираз",m_divmod:"Ціла частина й остача",m_power:"Степінь",m_rect:"Площа прямокутника",m_sum3:"Сума трьох чисел",
@@ -230,4 +273,3 @@ const LESSONS={
   text:["Просте число ділиться без остачі лише на 1 і на себе.","Щоб перевірити одне число, пройди циклом по можливих дільників. Щоб порахувати прості до n, постав цей цикл усередину іншого."],
   example:"n = 7\nok = True\nfor d in range(2, n):\n    if n % d == 0:\n        ok = False\nprint(ok)   # True: 7 просте"}
 };
-

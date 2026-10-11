@@ -200,6 +200,9 @@ function openTask(b,from,opts){
   }
   $("title").textContent=task.label||task.title;
   $("text").textContent=task.text||"";
+  const syntaxHint=$("syntaxHint");
+  syntaxHint.hidden=!task.syntaxHint;
+  syntaxHint.querySelector("code").textContent=task.syntaxHint||"";
   $("pseudo").hidden=!task.pseudo;
   $("pseudo").textContent=task.pseudo||"";
   $("sig").parentElement.hidden=!task.fn;
@@ -484,5 +487,4 @@ async function init(){
     $("status").textContent="Не вдалося завантажити Python. Перевір інтернет і онови сторінку.";
   }
 }
-
 

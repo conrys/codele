@@ -95,6 +95,8 @@ details p{margin:6px 0}
 .progress{height:6px;border-radius:999px;background:rgba(127,127,127,.22);overflow:hidden;margin:4px 0 12px}
 .progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--ok));border-radius:999px}
 .lesson{border:1px dashed var(--line);border-radius:12px;padding:8px 14px;margin-bottom:12px;background:var(--bg2)}
+.syntax-hint{margin:10px 0;color:var(--mut);font-size:14px;white-space:pre-line}
+.syntax-hint code{display:block;margin-top:4px;color:var(--txt);white-space:pre-wrap}
 .sig,.badge{display:inline-block;background:var(--hl);color:var(--hlink);border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700}
 .sig{font-size:15px}
 pre{background:var(--bg2);border:1px solid var(--line);padding:10px;border-radius:10px;overflow-x:auto;font-size:13px;white-space:pre-wrap}
