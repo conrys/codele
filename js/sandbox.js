@@ -7,10 +7,13 @@ const SANDBOX_MAX_STDIN=10000;
 const SANDBOX_MAX_OUTPUT=20000;
 
 function listSandbox(box){
-  const card=el("details",undefined,"card");
-  card.append(el("summary","Пісочниця Python"));
-  card.append(el("p","Пиши довільний код Python і запускай його без перевірки завдання. Рядки для input() введи нижче — по одному на рядок.","mut"));
-  card.append(el("p","Код працює окремо від сторінки; запуск обмежено 5 секундами. Доступні стандартні бібліотеки Python, які підтримує Pyodide у браузері. Системні модулі й доступ до мережі недоступні.","mut"));
+  const card=el("section",undefined,"card");
+  card.append(el("h2","Пісочниця Python"));
+  const info=el("details");
+  info.append(el("summary","Про пісочницю"));
+  info.append(el("p","Пиши довільний код Python і запускай його без перевірки завдання. Рядки для input() введи нижче — по одному на рядок.","mut"));
+  info.append(el("p","Код працює окремо від сторінки; запуск обмежено 5 секундами. Доступні стандартні бібліотеки Python, які підтримує Pyodide у браузері. Системні модулі й доступ до мережі недоступні.","mut"));
+  card.append(info);
 
   const code=el("textarea");
   code.className="sandbox-code";
