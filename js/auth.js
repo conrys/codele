@@ -112,7 +112,7 @@ async function authStart(){
 }
 $("miProfile").addEventListener("click",()=>{toggleMenu(false);openMyProfile()});
 $("miTeacher").addEventListener("click",()=>{toggleMenu(false);showTeacher()});
-$("tBack").addEventListener("click",teacherBack);
+$("tBack").addEventListener("click",()=>teacherBack());
 $("tab_panel").addEventListener("click",()=>showTeacher());
 
 // ---------- Мій профіль ----------
