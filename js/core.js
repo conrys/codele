@@ -273,8 +273,20 @@ async function updateLive(){
   if(n>=0)$("tok").textContent=n;
 }
 const PASTE_MIN=15;
+let copiedFromCode="";
+$("code").addEventListener("copy",e=>{
+  const c=e.currentTarget;
+  copiedFromCode=c.value.slice(c.selectionStart,c.selectionEnd);
+});
+$("code").addEventListener("cut",e=>{
+  const c=e.currentTarget;
+  copiedFromCode=c.value.slice(c.selectionStart,c.selectionEnd);
+});
+document.addEventListener("copy",e=>{if(e.target!==$("code"))copiedFromCode=""});
 $("code").addEventListener("paste",e=>{
   const text=(e.clipboardData||window.clipboardData).getData("text")||"";
+  const normalized=x=>x.replace(/\r\n/g,"\n");
+  if(copiedFromCode&&normalized(text)===normalized(copiedFromCode))return;
   if(!me||!task||text.length<PASTE_MIN)return;
   pastes.push({text:text});
   try{localStorage.setItem(pasteKey(),JSON.stringify(pastes))}catch(err){}
