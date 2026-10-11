@@ -149,15 +149,16 @@ pre.diff div{padding:0 10px;white-space:pre-wrap}
 .g-hi{background:#34d399}.g-mid{background:#fbbf24}.g-low{background:#fb923c}.g-bad{background:#f87171}
 .gmeta{flex:1 1 auto;min-width:0}
 .gmeta b{display:block;overflow-wrap:anywhere}
-.medals{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:6px;margin:8px 0}
-.medal{text-align:center;padding:5px 3px;border-radius:10px;background:var(--card2);border:1px solid var(--line)}
-.medal .ico{font-size:23px;line-height:1.15}
-.medal b{display:block;font-size:10px;line-height:1.2;overflow-wrap:anywhere}
+.medals{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0}
+.medal{text-align:center;padding:8px 5px;border-radius:10px;background:var(--card2);border:1px solid var(--line)}
+.medal .ico{font-size:25px;line-height:1.2}
+.medal b{display:block;font-size:11px;line-height:1.25;overflow-wrap:anywhere}
 .medal span{display:block;font-size:11px;color:var(--mut)}
-.medal-button{display:flex;min-width:0;min-height:54px;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.medal-button{display:flex;min-width:0;min-height:76px;flex-direction:column;align-items:center;justify-content:center;gap:4px}
 .medal-button.selected{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
 .medal-button:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
 .medal.locked{opacity:.5;filter:grayscale(1)}
+@media(max-width:420px){.medals{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var(--line)}
