@@ -155,10 +155,11 @@ function gradeForm(s,ref,title,after){
   wrap.append(sc,cm,btn("Оцінити",async()=>{
     const v=parseInt(sc.value,10);
     if(!(v>=1&&v<=12)){toast("Оцінка має бути від 1 до 12.");return}
-    const r=await sb.from("grades").insert({student_id:s.id,teacher_id:me.id,task_ref:ref,task_title:title.slice(0,120),score:v,comment:cm.value.trim()||null});
-    if(r.error){toast("Не вдалося зберегти оцінку.");return}
-    const g=await sb.from("grades").select("id,student_id,task_ref,task_title,score,comment,created_at").order("created_at",{ascending:false});
-    if(g.data)TD.grades=g.data;
+    const grade={student_id:s.id,teacher_id:me.id,task_ref:ref,task_title:title.slice(0,120),
+      score:v,comment:cm.value.trim()||null};
+    const r=await sb.from("grades").insert(grade);
+    if(r.error){toast("Не вдалося зберегти оцінку: "+r.error.message);return}
+    TD.grades.unshift(Object.assign(grade,{created_at:new Date().toISOString()}));
     toast("Оцінку "+v+" збережено.");
     if(after)after();
   }));
@@ -643,7 +644,11 @@ async function showSteps(s,r,back){
   draw();
   const gc=el("div",undefined,"card");
   gc.append(el("h2","Оцінка"));
-  gc.append(gradeForm(s,r,titleOf(r),()=>showSteps(s,r,T.sub?T.sub.back:back)));
+  gc.append(gradeForm(s,r,titleOf(r),()=>{
+    T.sub=null;
+    setBackLabel();
+    drawReview();
+  }));
   box.append(gc);
 }
 
