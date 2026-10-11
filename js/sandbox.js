@@ -23,6 +23,14 @@ function listSandbox(box){
   code.setAttribute("aria-label","Код Python");
   code.value=sandboxCode;
   code.addEventListener("input",()=>{sandboxCode=code.value});
+  code.addEventListener("keydown",event=>{
+    if(event.key!=="Tab")return;
+    event.preventDefault();
+    const start=code.selectionStart;
+    code.value=code.value.slice(0,start)+"    "+code.value.slice(code.selectionEnd);
+    code.selectionStart=code.selectionEnd=start+4;
+    sandboxCode=code.value;
+  });
 
   const copy=btn("Скопіювати код",async()=>{
     try{
