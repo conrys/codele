@@ -34,7 +34,7 @@ async function loadTeacher(){
   const box=$("tBody");
   box.textContent="Завантажую…";
   const q=await Promise.all([
-    sb.from("classes").select("id,name,join_code,paste_mark_until").order("created_at"),
+    sb.from("classes").select("id,name,join_code,paste_mark_until,teacher_id").order("created_at"),
     sb.from("profiles").select("id,nick,display_name,class_id").eq("role","student").order("nick"),
     sb.from("runs").select("user_id,task_ref,passed,created_at").order("created_at").limit(20000),
     sb.from("grades").select("id,student_id,task_ref,task_title,score,comment,created_at").order("created_at",{ascending:false}),
@@ -289,11 +289,144 @@ function drawManage(){
   const box=$("tBody");box.textContent="";
   const cur=classBar(box);
   if(T.note){box.append(el("div",T.note,"notice"));T.note=""}
-  if(!cur){noClass(box);newClassCard(box);return}
+  if(!cur){
+    noClass(box);
+    if(me.classRole==="admin"||me.classRole==="teacher")newClassCard(box);
+    return;
+  }
   drawTaskManager(box,cur);
   drawTestManager(box,cur);
-  classSettingsCard(box,cur);
-  newClassCard(box);
+  const classManagement=el("div");
+  box.append(classManagement);
+  sb.rpc("class_role_for_user",{p_class_id:cur.id}).then(r=>{
+    if(r.error){classManagement.append(el("p","Не вдалося перевірити права класу: "+r.error.message,"err"));return}
+    if(r.data==="admin"||r.data==="teacher"){
+      classSettingsCard(classManagement,cur);
+      classMembersCard(classManagement,cur);
+      newClassCard(classManagement);
+    }
+  });
+  helperProposalsCard(box,cur);
+}
+function classMembersCard(box,cur){
+  const c=el("details",undefined,"card");
+  c.append(el("summary","Вчителі, асистенти й помічники"));
+  const list=el("div");list.append(el("p","Завантажую…","mut"));c.append(list);
+  sb.rpc("list_class_members",{p_class_id:cur.id}).then(r=>{
+    list.textContent="";
+    if(r.error){list.append(el("p","Не вдалося завантажити склад класу: "+r.error.message,"err"));return}
+    (r.data||[]).forEach(member=>{
+      const row=el("div",undefined,"item");
+      row.append(el("span",member.display_name+" (@"+member.nick+") · "+({
+        teacher:"учитель",assistant:"асистент класу",helper:"помічник"
+      }[member.role]||member.role)));
+      if(member.user_id!==cur.teacher_id){
+        row.append(btn("Зняти роль",async()=>{
+          const result=await sb.rpc("set_class_member_role",{
+            p_class_id:cur.id,p_nick:member.nick,p_role:null
+          });
+          if(result.error){toast("Не вдалося зняти роль: "+result.error.message);return}
+          classMembersCardRefresh(cur);
+        },"ghost danger"));
+      }
+      list.append(row);
+    });
+    if(me.classRole==="admin"){
+      const ownerNick=el("input");ownerNick.type="text";ownerNick.maxLength=20;
+      ownerNick.placeholder="Нік нового власника";
+      list.append(ownerNick,btn("Передати право власника",async()=>{
+        const nick=ownerNick.value.trim().toLowerCase();
+        if(!nick){toast("Вкажи нік учителя.");return}
+        if(!confirm("Передати право власника класу користувачу @"+nick+"?"))return;
+        const result=await sb.rpc("set_class_owner",{p_class_id:cur.id,p_nick:nick});
+        if(result.error){toast("Не вдалося змінити власника: "+result.error.message);return}
+        T.classId=cur.id;T.note="Власника класу змінено.";loadTeacher();
+      },"ghost"));
+    }
+    const nick=el("input");nick.type="text";nick.maxLength=20;nick.placeholder="Нік учасника класу";
+    const role=el("select");
+    [["teacher","Повноправний учитель"],["assistant","Асистент класу"],["helper","Помічник-учень"]]
+      .forEach(([value,label])=>role.append(new Option(label,value)));
+    list.append(nick,role,btn("Призначити",async()=>{
+      const username=nick.value.trim().toLowerCase();
+      if(!username){toast("Вкажи нік учасника.");return}
+      const result=await sb.rpc("set_class_member_role",{
+        p_class_id:cur.id,p_nick:username,p_role:role.value
+      });
+      if(result.error){toast("Не вдалося призначити роль: "+result.error.message);return}
+      classMembersCardRefresh(cur);
+    }));
+  });
+  box.append(c);
+}
+function classMembersCardRefresh(cur){
+  T.classId=cur.id;
+  T.note="Склад класу оновлено.";
+  loadTeacher();
+}
+function helperProposalsCard(box,cur){
+  const c=el("details",undefined,"card");
+  c.append(el("summary","Пропозиції оцінок від помічників"));
+  const list=el("div");list.append(el("p","Завантажую…","mut"));c.append(list);
+  sb.rpc("list_helper_grade_proposals",{p_class_id:cur.id}).then(r=>{
+    list.textContent="";
+    if(r.error){list.append(el("p","Не вдалося завантажити пропозиції: "+r.error.message,"err"));return}
+    const pending=(r.data||[]).filter(p=>p.status==="pending");
+    if(!pending.length){list.append(el("p","Нових пропозицій немає.","mut"));return}
+    pending.forEach(proposal=>{
+      const row=el("div",undefined,"item");
+      const info=el("div");
+      info.append(el("b",titleOf(proposal.task_ref)+" · "+proposal.score+"/12"));
+      info.append(el("div","Від "+proposal.helper_nick+(proposal.comment?" · "+proposal.comment:""),"meta"));
+      row.append(info,
+        btn("Підтвердити",()=>decideHelperProposal(proposal.id,true,cur),"ghost"),
+        btn("Відхилити",()=>decideHelperProposal(proposal.id,false,cur),"ghost danger"));
+      list.append(row);
+    });
+  });
+  box.append(c);
+}
+async function decideHelperProposal(id,approve,cur){
+  const r=await sb.rpc("decide_helper_grade_proposal",{
+    p_proposal_id:id,p_approve:approve
+  });
+  if(r.error){toast("Не вдалося опрацювати пропозицію: "+r.error.message);return}
+  T.classId=cur.id;T.note=approve?"Оцінку помічника підтверджено.":"Пропозицію відхилено.";
+  loadTeacher();
+}
+async function listHelperReviews(box){
+  const c=el("div",undefined,"card");
+  c.append(el("h2","Анонімна перевірка робіт"));
+  c.append(el("p","Ти бачиш код і завдання без імені учня. Запропонована оцінка стане офіційною лише після підтвердження вчителем.","mut"));
+  box.append(c);
+  if(!me.classId){c.append(el("p","Для акаунта не знайдено клас.","err"));return}
+  const r=await sb.rpc("helper_review_queue",{p_class_id:me.classId});
+  if(r.error){c.append(el("p","Не вдалося завантажити роботи: "+r.error.message,"err"));return}
+  if(!(r.data||[]).length){c.append(el("p","Поки немає робіт для перевірки.","mut"));return}
+  r.data.forEach((work,index)=>{
+    const item=el("details",undefined,"item");
+    item.append(el("summary","Робота "+(index+1)+" · "+(work.task_title||titleOf(work.task_ref))+
+      (work.passed?" · перевірки пройдено":" · перевірки не пройдено")+" · спроб "+work.run_count));
+    item.append(el("pre",work.latest_code||"Код відсутній"));
+    if(work.proposal_status==="pending"){
+      item.append(el("p","Твою пропозицію вже надіслано — очікує на вчителя.","mut"));
+    }else{
+      const score=el("input");score.type="number";score.min=1;score.max=12;score.placeholder="Оцінка 1–12";
+      const comment=el("input");comment.type="text";comment.maxLength=500;comment.placeholder="Коментар учителю (необов’язково)";
+      item.append(score,comment,btn("Запропонувати оцінку",async()=>{
+        const value=Number(score.value);
+        if(!Number.isInteger(value)||value<1||value>12){toast("Оцінка має бути від 1 до 12.");return}
+        const result=await sb.rpc("propose_helper_grade",{
+          p_work_id:work.work_id,p_score:value,p_comment:comment.value.trim()||null
+        });
+        if(result.error){toast("Не вдалося надіслати пропозицію: "+result.error.message);return}
+        toast("Пропозицію надіслано вчителю.");
+        box.textContent="";
+        await listHelperReviews(box);
+      }));
+    }
+    c.append(item);
+  });
 }
 function newClassCard(box){
   const c=el("details",undefined,"card");
@@ -310,6 +443,12 @@ function classSettingsCard(box,cur){
   const c=el("details",undefined,"card");
   c.append(el("summary","Налаштування класу «"+cur.name+"»"));
   c.append(el("p","Код для реєстрації учнів: "+cur.join_code,"mut"));
+  c.append(btn("Змінити код класу",async()=>{
+    if(!confirm("Старий код перестане працювати для нових реєстрацій. Продовжити?"))return;
+    const r=await sb.rpc("rotate_class_join_code",{p_class_id:cur.id});
+    if(r.error){toast("Не вдалося змінити код класу: "+r.error.message);return}
+    T.classId=cur.id;T.note="Новий код для учнів: "+r.data;loadTeacher();
+  },"ghost"));
   const rn=el("input");rn.type="text";rn.maxLength=40;rn.value=cur.name;
   const lr=el("label","Назва класу");lr.append(rn);
   const dd=el("input");dd.type="date";dd.value=cur.paste_mark_until||"";
@@ -325,15 +464,17 @@ function classSettingsCard(box,cur){
     drawTeacher();
   }));
   // Видалити можна лише порожній клас: так дані учнів не загубляться випадково
-  c.append(btn("Видалити клас",async()=>{
-    if(!confirm("Видалити клас «"+cur.name+"» разом з його завданнями, тестами й матеріалами? Учнів у класі не має бути."))return;
-    const r=await sb.rpc("delete_class",{p_id:cur.id});
-    if(r.error){
-      T.note=/not empty/.test(r.error.message)?"У класі ще є учні. Спочатку видали їхні акаунти (розділ «Учні» → учень → «Керувати акаунтом»).":"Не вдалося видалити клас: "+r.error.message;
-      drawTeacher();return;
-    }
-    T.classId=null;T.note="Клас видалено.";loadTeacher();
-  },"ghost danger"));
+  if(cur.teacher_id===me.id||me.classRole==="admin"){
+    c.append(btn("Видалити клас",async()=>{
+      if(!confirm("Видалити клас «"+cur.name+"» разом з його завданнями, тестами й матеріалами? Учнів у класі не має бути."))return;
+      const r=await sb.rpc("delete_class",{p_id:cur.id});
+      if(r.error){
+        T.note=/not empty/.test(r.error.message)?"У класі ще є учні. Спочатку видали їхні акаунти (розділ «Учні» → учень → «Керувати акаунтом»).":"Не вдалося видалити клас: "+r.error.message;
+        drawTeacher();return;
+      }
+      T.classId=null;T.note="Клас видалено.";loadTeacher();
+    },"ghost danger"));
+  }
   box.append(c);
 }
 
@@ -715,13 +856,19 @@ function manageStudent(s){
     msg.textContent=r.error?"Не вдалося змінити пароль (мінімум 6 символів).":"Пароль змінено. Учень зможе увійти з новим.";
     if(!r.error)p.value="";
   },"ghost"));
-  dlg.append(el("p","Нікнейм змінити не можна. Якщо він поганий, видали акаунт, і учень зареєструється знову з новим.","mut"));
-  dlg.append(btn("Видалити акаунт",async()=>{
-    if(!confirm("Видалити акаунт "+s.nick+" разом з усіма результатами? Це не можна скасувати."))return;
-    const r=await sb.rpc("teacher_delete_student",{p_uid:s.id});
-    if(r.error){msg.textContent="Не вдалося видалити.";return}
-    dlg.close();T.studentId=null;loadTeacher();
-  },"ghost danger"));
+  dlg.append(el("p","Нікнейм змінити не можна. Видалення акаунта доступне повноправному вчителю або адміністратору.","mut"));
+  const deleteAction=el("div");dlg.append(deleteAction);
+  sb.rpc("class_role_for_user",{p_class_id:s.class_id}).then(role=>{
+    deleteAction.textContent="";
+    if(role.error){deleteAction.append(el("p","Не вдалося перевірити права: "+role.error.message,"err"));return}
+    if(role.data!=="teacher"&&role.data!=="admin")return;
+    deleteAction.append(btn("Видалити акаунт",async()=>{
+      if(!confirm("Видалити акаунт "+s.nick+" разом з усіма результатами? Це не можна скасувати."))return;
+      const r=await sb.rpc("teacher_delete_student",{p_uid:s.id});
+      if(r.error){msg.textContent="Не вдалося видалити: "+r.error.message;return}
+      dlg.close();T.studentId=null;loadTeacher();
+    },"ghost danger"));
+  });
   dlg.append(msg,btn("Закрити",()=>{dlg.close();drawTeacher()}));
   dlg.showModal();
 }

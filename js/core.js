@@ -72,7 +72,7 @@ let marathon=null, lastMarathon=null;     // стан марафону та пі
 let practiceFilter="all";
 let running=false;
 const MARA_PER_TOPIC=3;
-const TABS=["topics","practice","marathon","teacher","tests"];   // вкладки
+const TABS=["topics","practice","marathon","teacher","tests","helper"];   // вкладки
 
 const topicName=id=>id==="teacher"?"Від вчителя":(TOPICS.find(t=>t.id===id)||{name:id}).name;
 
@@ -135,6 +135,7 @@ async function renderList(){
   else if(tab==="practice")listPractice(box);
   else if(tab==="marathon")await listMarathon(box);
   else if(tab==="teacher")await listTeacherTasks(box);
+  else if(tab==="helper")await listHelperReviews(box);
   else await listTests(box);
 }
 function taskButton(b,fn){

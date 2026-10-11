@@ -33,6 +33,7 @@ async function showApp(){
   menuBtn.textContent=(me.role==="teacher"?"👨‍🏫 ":"🎓 ")+me.nick;
   $("miTeacher").hidden=me.role!=="teacher";
   $("tab_panel").hidden=me.role!=="teacher";
+  $("tab_helper").hidden=me.classRole!=="helper";
   // Скільки часу учням показувати значок «вставлено», вирішує вчитель
   const res=await Promise.all([sb.rpc("paste_mark_visible"),loadProgress()]);
   pasteMarkVisible=me.role==="teacher"||res[0].data!==false;
@@ -42,7 +43,7 @@ async function showApp(){
 }
 // Завантажує профіль. Якщо його ще немає, просимо дозаповнити ім'я та код класу.
 async function loadProfile(user){
-  const r=await sb.from("profiles").select("id,nick,display_name,role").eq("id",user.id).maybeSingle();
+  const r=await sb.from("profiles").select("id,nick,display_name,role,class_id").eq("id",user.id).maybeSingle();
   if(r.error){authMsg("Не вдалося отримати профіль: "+r.error.message);showAuth();return}
   if(!r.data){
     authMode="finish";
@@ -50,7 +51,9 @@ async function loadProfile(user){
     showAuth();
     return;
   }
-  me={id:r.data.id,nick:r.data.nick,name:r.data.display_name,role:r.data.role};
+  const role=await sb.rpc("my_class_role");
+  if(role.error){authMsg("Не вдалося перевірити роль: "+role.error.message);showAuth();return}
+  me={id:r.data.id,nick:r.data.nick,name:r.data.display_name,role:r.data.role,classId:r.data.class_id,classRole:role.data};
   await showApp();
 }
 $("aSwitch").addEventListener("click",()=>{
