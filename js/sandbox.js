@@ -93,7 +93,7 @@ function listSandbox(box){
 
 function runSandboxCode(src,stdin){
   return new Promise((resolve,reject)=>{
-    const worker=new Worker("js/sandbox-worker.js?v=20261011a");
+    const worker=new Worker("js/sandbox-worker.js?v=20261012a");
     let timer=setTimeout(()=>{
       worker.terminate();
       reject(new Error("час очікування запуску Python вичерпано."));
