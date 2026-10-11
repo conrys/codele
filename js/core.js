@@ -308,6 +308,16 @@ function explainError(msg){
 }
 function failsNow(){return marathon?marathon.fails:(prog[ref]||{fails:0}).fails}
 
+function nextUnsolvedTask(){
+  const current=TASKS.findIndex(b=>b.ref===base.ref);
+  if(current<0)return null;
+  for(let offset=1;offset<=TASKS.length;offset++){
+    const candidate=TASKS[(current+offset)%TASKS.length];
+    if(!(prog[candidate.ref]||{}).solved)return candidate;
+  }
+  return null;
+}
+
 function showResults(res,passed,level){
   const box=$("results");
   box.hidden=false;box.textContent="";
@@ -327,6 +337,15 @@ function showResults(res,passed,level){
     row.append(el("span","✗","bad"));
     row.append(el("span",level>=3?res.error:(res.error_line?"Помилка в рядку "+res.error_line+".":"У програмі є помилка."),"err"));
     box.append(row);
+  }
+  if(passed&&!marathon&&(tab==="topics"||tab==="practice")){
+    const next=nextUnsolvedTask();
+    if(next){
+      box.append(btn("Наступне завдання →",()=>{
+        if(tab==="practice")practiceFilter="all";
+        openTask(next,tab);
+      }));
+    }else box.append(el("p","Усі завдання курсу розв’язано! 🎉","ok"));
   }
 }
 function showHint(res,passed,level){
@@ -487,4 +506,3 @@ async function init(){
     $("status").textContent="Не вдалося завантажити Python. Перевір інтернет і онови сторінку.";
   }
 }
-
