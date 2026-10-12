@@ -79,6 +79,7 @@ const topicName=id=>id==="teacher"?"Від вчителя":(TOPICS.find(t=>t.id=
 // Скільки разів учень натискав «Інший варіант» у практиці (щоб варіант не повторювався)
 function pv(){try{return JSON.parse(localStorage.getItem("codele-pv:"+me.id))||{}}catch(e){return {}}}
 function pvInc(id){const o=pv();o[id]=(o[id]||0)+1;try{localStorage.setItem("codele-pv:"+me.id,JSON.stringify(o))}catch(e){}}
+const practiceRef=b=>"p:"+b.id;
 
 // ---------- Прогрес ----------
 function recordProgressRun(target,r,passed,errorLine,variant){
@@ -139,8 +140,8 @@ async function renderList(){
   else if(tab==="sandbox")await listSandbox(box);
   else await listTests(box);
 }
-function taskButton(b,fn){
-  const p=prog[b.ref]||{runs:0,solved:false};
+function taskButton(b,fn,progressRef=b.ref){
+  const p=prog[progressRef]||{runs:0,solved:false};
   return btn((p.solved?"✓ ":"")+(b.label||b.title)+(p.runs?" · спроб: "+p.runs:""),fn,"taskbtn"+(p.solved?" done":""));
 }
 function listTopics(box){
@@ -171,9 +172,9 @@ function listPractice(box){
   [{id:"all",name:"Усі"}].concat(TOPICS).forEach(t=>chips.append(btn(t.name,()=>{practiceFilter=t.id;render()},practiceFilter===t.id?"":"ghost")));
   box.append(chips);
   const c=el("div",undefined,"card");
-  c.append(el("p","Обери, що хочеш розв’язати сьогодні. Кількість спроб необмежена, підказки стають докладнішими з кожною помилкою, а числа та слова можна змінити кнопкою «Інший варіант».","mut"));
+  c.append(el("p","Обери, що хочеш розв’язати сьогодні. Кількість спроб необмежена, підказки стають докладнішими з кожною помилкою. У деяких завданнях доступні інші варіанти умови.","mut"));
   const row=el("div",undefined,"tasks");
-  TASKS.filter(x=>practiceFilter==="all"||x.topic===practiceFilter).forEach(b=>row.append(taskButton(b,()=>openTask(b,"practice"))));
+  TASKS.filter(x=>practiceFilter==="all"||x.topic===practiceFilter).forEach(b=>row.append(taskButton(b,()=>openTask(b,"practice"),practiceRef(b))));
   c.append(row);
   box.append(c);
 }
@@ -205,7 +206,7 @@ const pasteKey=()=>"codele-paste:"+me.id+":"+ref+":"+seed;
 function openTask(b,from,opts){
   opts=opts||{};
   base=b;
-  ref=opts.ref||b.ref;
+  ref=opts.ref||(from==="practice"?practiceRef(b):b.ref);
   seed=opts.seed!==undefined?opts.seed:(from==="practice"?hash31(me.id+"|"+b.id+"|p"+(pv()[b.id]||0)):hash31(me.id+"|"+b.id));
   task=instantiate(b,seed);
   tab=from;view="task";errLine=null;
@@ -237,7 +238,7 @@ function openTask(b,from,opts){
   try{saved=localStorage.getItem(draftKey())}catch(e){}
   $("code").value=saved!==null?saved:(task.start!==undefined?task.start:"def "+task.fn+"("+task.params+"):\n    ");
   clearOutputs();
-  $("variantBtn").hidden=from!=="practice";
+  $("variantBtn").hidden=from!=="practice"||!base.make;
   $("skipBtn").hidden=!marathon;
   $("crumb").textContent=marathon?"":topicName(b.topic);
   $("tok").textContent="–";$("steps").textContent="–";
@@ -352,7 +353,8 @@ function nextUnsolvedTask(){
   if(current<0)return null;
   for(let offset=1;offset<=TASKS.length;offset++){
     const candidate=TASKS[(current+offset)%TASKS.length];
-    if(!(prog[candidate.ref]||{}).solved)return candidate;
+    const candidateRef=tab==="practice"?practiceRef(candidate):candidate.ref;
+    if(!(prog[candidateRef]||{}).solved)return candidate;
   }
   return null;
 }
@@ -384,7 +386,7 @@ function showResults(res,passed,level){
         if(tab==="practice")practiceFilter="all";
         openTask(next,tab);
       }));
-    }else box.append(el("p","Усі завдання курсу розв’язано! 🎉","ok"));
+    }else box.append(el("p",tab==="practice"?"Усі завдання практики розв’язано! 🎉":"Усі завдання курсу розв’язано! 🎉","ok"));
   }
 }
 function showHint(res,passed,level){

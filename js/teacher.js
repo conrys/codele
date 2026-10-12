@@ -12,9 +12,9 @@ const csvCell=v=>'"'+String(v===null||v===undefined?"":v).replace(/"/g,'""')+'"'
 function showTeacher(){$("appBody").hidden=true;$("tPanel").hidden=false;loadTeacher()}
 function hideTeacher(){$("tPanel").hidden=true;$("appBody").hidden=false}
 
-// Опис завдання за посиланням (ref) виду b:id, m:id, t:uuid (завдання від вчителя) або x:uuid (тест)
+// Опис завдання за посиланням (ref) виду b:id, p:id, m:id, t:uuid (завдання від вчителя) або x:uuid (тест)
 function baseByRef(r){
-  if(r.startsWith("b:")||r.startsWith("m:"))return TASKS.find(x=>x.id===r.slice(2))||null;
+  if(r.startsWith("b:")||r.startsWith("p:")||r.startsWith("m:"))return TASKS.find(x=>x.id===r.slice(2))||null;
   if(r.startsWith("t:")){
     const row=TD&&TD.tasks.find(x=>"t:"+x.id===r);
     if(row)return rowToBase(row);
@@ -26,7 +26,7 @@ function baseByRef(r){
 function titleOf(r){
   if(r.startsWith("x:")){const t=TD&&TD.tests&&TD.tests.find(x=>"x:"+x.id===r);return t?"Тест: "+t.title:"Тест"}
   const b=baseByRef(r);
-  if(b)return (r.startsWith("m:")?"Марафон: ":"")+(b.label||b.title);
+  if(b)return (r.startsWith("m:")?"Марафон: ":r.startsWith("p:")?"Практика: ":"")+(b.label||b.title);
   return r.startsWith("t:")?"Завдання від вчителя":r;
 }
 
@@ -59,7 +59,7 @@ function statsOf(uid){
     s.last=x.created_at;
     const r=s.refs[x.task_ref]||(s.refs[x.task_ref]={runs:0,solved:false,last:null});
     r.runs++;r.last=x.created_at;
-    if(x.passed){r.solved=true;if(!x.task_ref.startsWith("m:"))s.solved.add(x.task_ref)}
+    if(x.passed){r.solved=true;if(!x.task_ref.startsWith("m:")&&!x.task_ref.startsWith("p:"))s.solved.add(x.task_ref)}
   });
   return s;
 }
