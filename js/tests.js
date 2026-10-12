@@ -224,12 +224,89 @@ const TEST_PROMPT=`Створи тест для учнів 8 класу з ін�
 function drawTestManager(box,cur){
   const c=el("details",undefined,"card");
   c.append(el("summary","Тести"));
-  c.append(el("p","Тест імпортується у форматі JSON прямо в базу: учні не бачать правильних відповідей, а сервер перевіряє їх сам. Попроси будь-який ШІ створити тест за готовим промптом і встав результат сюди.","mut"));
+  c.append(el("p","Створи тест вручну або встав JSON від ШІ. Правильні відповіді зберігаються на сервері; учні їх не отримують.","mut"));
   c.append(btn("Скопіювати промпт для ШІ",async()=>{
     try{await navigator.clipboard.writeText(TEST_PROMPT);toast("Промпт скопійовано.")}catch(e){toast("Не вдалося скопіювати.")}
   },"ghost"));
   const ta=el("textarea",undefined,"json");ta.placeholder="Встав JSON тесту";
   const jh=el("p","","mut");jsonHint(ta,jh,v=>v&&Array.isArray(v.questions)?v.questions.length+" питань":"");
+  const manual=el("dialog",undefined,"builder-dialog"),questions=el("div");
+  const manualTitle=el("h2","Створити тест вручну");
+  manualTitle.id="manualTestTitle";
+  manual.setAttribute("aria-labelledby",manualTitle.id);
+  const manualHead=el("div",undefined,"builder-dialog-head");
+  manualHead.append(manualTitle,btn("Закрити",()=>manual.close(),"ghost"));
+  manual.append(manualHead);
+  const mt=el("input");mt.type="text";mt.maxLength=100;mt.placeholder="Назва тесту";
+  const mtl=el("label","Назва тесту");mtl.append(mt);
+  const mtopic=el("input");mtopic.type="text";mtopic.maxLength=40;mtopic.placeholder="Необов’язково";
+  const mtopicLabel=el("label","Тема");mtopicLabel.append(mtopic);
+  let questionIndex=0,questionUid=0;
+  const manualMsg=el("p","","mut");
+  function addQuestion(){
+    if(questions.children.length>=100){manualMsg.textContent="У тесті може бути не більше 100 питань.";return}
+    const uid=++questionUid;
+    const card=el("div",undefined,"card");
+    const heading=el("h3","Питання "+(++questionIndex));
+    const type=el("select");
+    [["single","Одна правильна відповідь"],["multiple","Кілька правильних відповідей"],["short","Коротка відповідь"],["code","Результат виконання коду"]]
+      .forEach(([value,label])=>type.append(new Option(label,value)));
+    const typeLabel=el("label","Тип питання");typeLabel.append(type);
+    const prompt=el("textarea");prompt.placeholder="Текст питання";prompt.rows=2;
+    const promptLabel=el("label","Питання");promptLabel.append(prompt);
+    const code=el("textarea");code.placeholder="Код для аналізу (необов’язково)";code.rows=3;
+    const codeLabel=el("label","Фрагмент коду");codeLabel.append(code);
+    const choices=el("div"),choiceControls=[];
+    function addChoice(){
+      if(choiceControls.length>=10){manualMsg.textContent="У питанні може бути не більше 10 варіантів.";return}
+      const line=el("div",undefined,"bar"),correct=el("input"),text=el("input");
+      correct.type=type.value==="single"?"radio":"checkbox";correct.name="test-answer-"+uid;
+      text.type="text";text.placeholder="Варіант відповіді";
+      line.append(correct,text);choices.append(line);choiceControls.push({correct:correct,text:text});
+    }
+    const addChoiceButton=btn("Додати варіант",addChoice,"ghost");
+    const accepted=el("textarea");accepted.placeholder="Правильні відповіді: по одній на рядок";accepted.rows=2;
+    const acceptedLabel=el("label","Допустимі відповіді");acceptedLabel.append(accepted);
+    const points=el("input");points.type="number";points.min=1;points.max=100;points.value="1";
+    const pointsLabel=el("label","Бали");pointsLabel.append(points);
+    const explanation=el("textarea");explanation.placeholder="Пояснення правильної відповіді (необов’язково)";explanation.rows=2;
+    const remove=btn("Видалити питання",()=>{card.remove();renumber()},"ghost danger");
+    function updateType(){
+      const optionType=type.value==="single"||type.value==="multiple";
+      choices.hidden=!optionType;addChoiceButton.hidden=!optionType;
+      acceptedLabel.hidden=optionType;codeLabel.hidden=type.value!=="code";
+      choiceControls.forEach(x=>{x.correct.type=type.value==="single"?"radio":"checkbox"});
+    }
+    type.addEventListener("change",updateType);
+    card.append(heading,typeLabel,promptLabel,codeLabel,choices,addChoiceButton,acceptedLabel,pointsLabel,explanation,remove);
+    questions.append(card);
+    addChoice();addChoice();addChoice();updateType();
+  }
+  function renumber(){questionIndex=0;Array.from(questions.children).forEach(card=>{questionIndex++;card.querySelector("h3").textContent="Питання "+questionIndex})}
+  const msg=el("p","","mut");
+  const addQuestionButton=btn("Додати питання",addQuestion,"ghost");
+  manual.append(mtl,mtopicLabel,questions,addQuestionButton);
+  addQuestion();
+  const manualAtt=el("input");manualAtt.type="number";manualAtt.min=1;manualAtt.max=20;manualAtt.value=1;
+  const manualAttLabel=el("label","Скільки спроб дозволено:");manualAttLabel.append(manualAtt);
+  const manualTm=el("input");manualTm.type="number";manualTm.min=1;manualTm.max=240;manualTm.placeholder="без обмеження";
+  const manualTmLabel=el("label","Ліміт часу, хвилин (необов’язково):");manualTmLabel.append(manualTm);
+  const manualSh=el("input");manualSh.type="checkbox";manualSh.checked=true;
+  const manualShLabel=el("label",undefined,"opt");manualShLabel.append(manualSh,el("span","Показувати правильні відповіді після здачі"));
+  const manualOpens=el("input");manualOpens.type="datetime-local";
+  const manualOpensLabel=el("label","Відкрити:");manualOpensLabel.append(manualOpens);
+  const manualCloses=el("input");manualCloses.type="datetime-local";
+  const manualClosesLabel=el("label","Закрити (необов’язково):");manualClosesLabel.append(manualCloses);
+  const localDateTime=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  manualOpens.value=localDateTime(new Date());
+  const manualSubmit=btn("Додати тест",async()=>{
+    const spec=manualSpec();
+    if(spec)await publish(spec,"Тест додано.",manualMsg,{att:manualAtt,tm:manualTm,sh:manualSh,o:manualOpens,cl:manualCloses,dialog:manual});
+  });
+  manual.append(manualAttLabel,manualTmLabel,manualShLabel,manualOpensLabel,manualClosesLabel,manualSubmit,manualMsg);
+  manual.addEventListener("click",event=>{if(event.target===manual)manual.close()});
+  manual.addEventListener("close",()=>manual.remove());
+  const openManual=btn("Додати тест вручну",()=>{document.body.append(manual);manual.showModal();mt.focus()});
   const att=el("input");att.type="number";att.min=1;att.max=20;att.value=1;
   const la=el("label","Скільки спроб дозволено:");la.append(att);
   const tm=el("input");tm.type="number";tm.min=1;tm.max=240;tm.placeholder="без обмеження";
@@ -240,20 +317,58 @@ function drawTestManager(box,cur){
   const lo=el("label","Відкрити:");lo.append(o);
   const cl=el("input");cl.type="datetime-local";
   const lc=el("label","Закрити (необов’язково):");lc.append(cl);
-  const local=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  o.value=local(new Date());
-  const msg=el("p","","mut");
-  c.append(ta,jh,la,lt,ls,lo,lc,btn("Імпортувати тест",async()=>{
-    const pr=parseLenient(ta.value);
-    if(pr.error){msg.textContent=pr.error;return}
-    const spec=pr.value;
-    if(!spec||typeof spec!=="object"||Array.isArray(spec)){msg.textContent="Потрібен один JSON-об’єкт.";return}
+  o.value=localDateTime(new Date());
+  async function publish(spec,successMessage,target=msg,options={}){
     const r=await sb.rpc("create_test",{p_class:cur.id,p_spec:spec,
-      p_opens:new Date(o.value||Date.now()).toISOString(),p_closes:cl.value?new Date(cl.value).toISOString():null,
-      p_max_attempts:parseInt(att.value,10)||1,p_time:tm.value?parseInt(tm.value,10):null,p_show:sh.checked});
-    if(r.error){msg.textContent="Тест не додано: "+r.error.message.replace(/^invalid test:\s*/,"");return}
-    T.note="Тест додано.";loadTeacher();
-  }),msg);
+      p_opens:new Date((options.o||o).value||Date.now()).toISOString(),p_closes:(options.cl||cl).value?new Date((options.cl||cl).value).toISOString():null,
+      p_max_attempts:parseInt((options.att||att).value,10)||1,p_time:(options.tm||tm).value?parseInt((options.tm||tm).value,10):null,p_show:(options.sh||sh).checked});
+    if(r.error){target.textContent="Тест не додано: "+r.error.message.replace(/^invalid test:\s*/,"");return}
+    if(options.dialog)options.dialog.close();
+    T.note=successMessage;loadTeacher();
+  }
+  function manualSpec(){
+    manualMsg.textContent="";
+    if(!mt.value.trim()){manualMsg.textContent="Вкажи назву тесту.";return null}
+    const qs=[];
+    for(const [i,card] of Array.from(questions.children).entries()){
+      const controls=Array.from(card.querySelectorAll(".bar")).filter(row=>row.querySelector("input[type=text]"));
+      const type=card.querySelector("select").value,text=card.querySelector("textarea").value.trim();
+      if(!text){manualMsg.textContent="Заповни текст питання "+(i+1)+".";return null}
+      const points=Number(card.querySelector('input[type="number"]').value);
+      if(!Number.isInteger(points)||points<1||points>100){manualMsg.textContent="Бали за питання мають бути від 1 до 100.";return null}
+      const q={type:type,text:text,points:points};
+      const textareas=card.querySelectorAll("textarea");
+      const explanation=textareas[3];
+      if(explanation&&explanation.value.trim())q.explain=explanation.value.trim();
+      if(type==="single"||type==="multiple"){
+        const options=[],answers=[];
+        controls.forEach(row=>{
+          const inputs=row.querySelectorAll("input");
+          const value=inputs[1].value.trim();
+          if(value){if(inputs[0].checked)answers.push(options.length);options.push(value)}
+        });
+        if(options.length<2){manualMsg.textContent="Додай щонайменше два варіанти до питання "+(i+1)+".";return null}
+        if(!answers.length||type==="single"&&answers.length!==1){manualMsg.textContent="Познач правильну відповідь у питанні "+(i+1)+".";return null}
+        q.options=options;q.answer=type==="single"?answers[0]:answers;
+      }else{
+        const answers=textareas[2].value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+        if(!answers.length){manualMsg.textContent="Вкажи правильну відповідь у питанні "+(i+1)+".";return null}
+        q.answer=answers;
+        if(type==="code"&&textareas[1].value.trim())q.code=textareas[1].value.trim();
+      }
+      qs.push(q);
+    }
+    if(!qs.length){manualMsg.textContent="Додай хоча б одне питання.";return null}
+    return {title:mt.value.trim(),topic:mtopic.value.trim()||undefined,questions:qs};
+  }
+  c.append(openManual,ta,jh,la,lt,ls,lo,lc,
+    btn("Імпортувати тест із JSON",async()=>{
+      const pr=parseLenient(ta.value);
+      if(pr.error){msg.textContent=pr.error;return}
+      const spec=pr.value;
+      if(!spec||typeof spec!=="object"||Array.isArray(spec)){msg.textContent="Потрібен один JSON-об’єкт.";return}
+      await publish(spec,"Тест додано.");
+    }),msg);
   const mine=TD.tests.filter(t=>t.class_id===cur.id);
   if(mine.length){
     c.append(el("h2","Додані тести"));

@@ -59,6 +59,7 @@ input[type=text],input[type=password],input[type=number],input[type=date],input[
 input:disabled{opacity:.6}
 input[type=checkbox],input[type=radio]{width:20px;height:20px;margin:0;padding:0;accent-color:var(--accent)}
 textarea.json{width:100%;min-height:140px;font-size:13px;line-height:1.45}
+.builder textarea{width:100%;box-sizing:border-box}
 .opt{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0;color:var(--txt);font-size:16px}
 
 /* ---------- Шапка й меню ---------- */
@@ -182,6 +183,12 @@ th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var
 /* ---------- Вікно, повідомлення ---------- */
 dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:16px;width:min(560px,calc(100% - 24px));max-height:90vh;overflow:auto;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
 dialog::backdrop{background:rgba(5,10,18,.65)}
+.builder-dialog{width:min(760px,calc(100% - 24px));max-height:calc(100dvh - 32px);padding:clamp(16px,3vw,28px)}
+.builder-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.builder-dialog-head h2{margin:0}
+.builder-dialog .card{padding:12px}
+.builder-dialog textarea{width:100%;box-sizing:border-box}
+.builder-dialog input[type=text],.builder-dialog input[type=number],.builder-dialog input[type=datetime-local],.builder-dialog select{width:100%;box-sizing:border-box}
 dialog h2{margin:14px 0 6px}
 dialog h2:first-child{margin-top:0}
 dialog button{margin:4px 6px 4px 0}

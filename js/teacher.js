@@ -557,13 +557,112 @@ const TASK_PROMPT=`Створи завдання з програмування �
 function drawTaskManager(box,cur){
   const c=el("details",undefined,"card");
   c.append(el("summary","Завдання від вчителя"));
-  c.append(el("p","Завдання додаються у форматі JSON: попроси будь-який ШІ створити його за готовим промптом і встав сюди. Учні побачать завдання на вкладці «Від вчителя» в обрану дату.","mut"));
+  c.append(el("p","Створи задачу вручну або встав JSON від ШІ. Учні побачать її на вкладці «Від вчителя» у вибраний час.","mut"));
   c.append(btn("Скопіювати промпт для ШІ",async()=>{
     try{await navigator.clipboard.writeText(TASK_PROMPT);T.note="Промпт скопійовано.";}catch(e){T.note="Не вдалося скопіювати.";}
     toast(T.note);T.note="";
   },"ghost"));
-  const ta=el("textarea",undefined,"json");ta.placeholder="Встав JSON завдання";
-  const jh=el("p","","mut");jsonHint(ta,jh,v=>v&&typeof v.title==="string"?"«"+v.title+"»":"");
+  const manual=el("dialog",undefined,"builder-dialog");
+  const manualTitle=el("h2","Створити задачу вручну");
+  manualTitle.id="manualTaskTitle";
+  manual.setAttribute("aria-labelledby",manualTitle.id);
+  const manualHead=el("div",undefined,"builder-dialog-head");
+  manualHead.append(manualTitle,btn("Закрити",()=>manual.close(),"ghost"));
+  manual.append(manualHead);
+  manual.append(el("p","Для персоналізованих варіантів додай параметр і встав {{назва}} у текст, очікуваний результат або введення. Варіант стабільний для цього учня й задачі; щоб отримати іншу відповідь, вкажи відповідні значення в параметрі.","mut"));
+  const title=el("input");title.type="text";title.maxLength=80;title.placeholder="Назва задачі";
+  const titleLabel=el("label","Назва");titleLabel.append(title);
+  const topic=el("input");topic.type="text";topic.maxLength=40;topic.placeholder="Необов’язково";
+  const topicLabel=el("label","Тема");topicLabel.append(topic);
+  const text=el("textarea");text.placeholder="Умова задачі";text.rows=3;
+  const textLabel=el("label","Умова");textLabel.append(text);
+  const start=el("textarea");start.placeholder="Початковий код (необов’язково)";start.rows=3;
+  const startLabel=el("label","Початковий код");startLabel.append(start);
+  const expect=el("textarea");expect.placeholder="Очікуваний вивід, якщо завдання не читає input()";expect.rows=2;
+  const expectLabel=el("label","Очікуваний вивід");expectLabel.append(expect);
+  const caseList=el("div");
+  function addCase(){
+    const card=el("div",undefined,"card"),stdin=el("textarea"),output=el("textarea");
+    stdin.placeholder="Введення: кожен рядок окремо";stdin.rows=2;
+    output.placeholder="Очікуваний вивід";output.rows=2;
+    const stdinLabel=el("label","Вхідні дані");stdinLabel.append(stdin);
+    const outputLabel=el("label","Очікуваний вивід");outputLabel.append(output);
+    card.append(el("b","Перевірка"),stdinLabel,outputLabel,btn("Видалити перевірку",()=>card.remove(),"ghost danger"));
+    caseList.append(card);
+  }
+  const params=el("div");
+  function addParam(){
+    const row=el("div",undefined,"card"),name=el("input"),mode=el("select"),values=el("input"),min=el("input"),max=el("input");
+    name.type="text";name.placeholder="Назва параметра, наприклад n";
+    [["values","Вибір зі значень"],["range","Випадкове число в межах"]].forEach(([v,l])=>mode.append(new Option(l,v)));
+    values.type="text";values.placeholder="Значення через кому, наприклад 3, 5, 8";
+    min.type="number";min.placeholder="Мін.";min.step="1";
+    max.type="number";max.placeholder="Макс.";max.step="1";
+    const valuesLabel=el("label","Можливі значення");valuesLabel.append(values);
+    const minLabel=el("label","Мінімум");minLabel.append(min);
+    const maxLabel=el("label","Максимум");maxLabel.append(max);
+    function update(){valuesLabel.hidden=mode.value!=="values";minLabel.hidden=maxLabel.hidden=mode.value!=="range"}
+    mode.addEventListener("change",update);
+    row.append(name,mode,valuesLabel,minLabel,maxLabel,btn("Видалити параметр",()=>row.remove(),"ghost danger"));
+    params.append(row);update();
+  }
+  const explanation=el("textarea");explanation.placeholder="Пояснення до задачі (необов’язково, абзац на рядок)";explanation.rows=2;
+  const explanationLabel=el("label","Пояснення");explanationLabel.append(explanation);
+  const example=el("textarea");example.placeholder="Приклад коду для учня (необов’язково)";example.rows=3;
+  const exampleLabel=el("label","Приклад");exampleLabel.append(example);
+  const constructFields=el("div",undefined,"bar"),constructs=[];
+  [["For","for"],["While","while"],["If","if"],["FunctionDef","функція"],["ClassDef","клас"],["Match","match"]].forEach(([value,label])=>{
+    const input=el("input");input.type="checkbox";constructs.push({value:value,input:input});
+    const item=el("label",undefined,"opt");item.append(input,el("span",label));constructFields.append(item);
+  });
+  const manualMsg=el("p","","mut");
+  const buildManualTask=()=>{
+    manualMsg.textContent="";
+    if(!title.value.trim()||!text.value.trim()){manualMsg.textContent="Заповни назву й умову задачі.";return null}
+    const spec={title:title.value.trim(),text:text.value.trim()};
+    if(topic.value.trim())spec.topic=topic.value.trim();
+    if(start.value)spec.start=start.value;
+    if(explanation.value.trim())spec.explain=explanation.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    if(example.value.trim())spec.example=example.value;
+    const uses=constructs.filter(x=>x.input.checked).map(x=>x.value);
+    if(uses.length)spec.uses=uses;
+    const testCases=Array.from(caseList.children).map(card=>{
+      const fields=card.querySelectorAll("textarea");
+      const stdin=fields[0].value.split(/\r?\n/);
+      if(stdin.length===1&&stdin[0]==="")stdin.length=0;
+      return {stdin:stdin,expect:fields[1].value};
+    });
+    if(testCases.length){
+      if(testCases.some(x=>!x.expect.trim())){manualMsg.textContent="У кожної перевірки вкажи очікуваний вивід.";return null}
+      spec.cases=testCases;
+    }else if(expect.value.length)spec.expect=expect.value;
+    else{manualMsg.textContent="Вкажи очікуваний вивід або додай перевірки з input().";return null}
+    const values={};
+    for(const row of params.children){
+      const name=row.querySelector('input[type="text"]').value.trim();
+      const mode=row.querySelector("select").value;
+      if(!/^[A-Za-z_]\w*$/.test(name)){manualMsg.textContent="У назві параметра можна використовувати латинські літери, цифри й _. Назва має починатися з літери або _.";return null}
+      if(Object.prototype.hasOwnProperty.call(values,name)){manualMsg.textContent="Параметр «"+name+"» додано двічі.";return null}
+      if(mode==="values"){
+        const options=row.querySelectorAll('input[type="text"]')[1].value.split(",").map(x=>x.trim()).filter(Boolean);
+        if(!options.length){manualMsg.textContent="Вкажи значення для параметра «"+name+"».";return null}
+        values[name]=options;
+      }else{
+        const bounds=row.querySelectorAll('input[type="number"]'),low=Number(bounds[0].value),high=Number(bounds[1].value);
+        if(!Number.isInteger(low)||!Number.isInteger(high)||low>high){manualMsg.textContent="Перевір межі діапазону параметра «"+name+"».";return null}
+        values[name]={min:low,max:high};
+      }
+    }
+    if(Object.keys(values).length){
+      const template=JSON.stringify(spec);
+      for(const name of Object.keys(values)){
+        if(!template.includes("{{"+name+"}}")){manualMsg.textContent="Додай {{"+name+"}} у текст або перевірки, інакше цей параметр не змінить задачу.";return null}
+      }
+      spec.params=values;
+    }
+    if(JSON.stringify(spec).length>50000){manualMsg.textContent="Задача завелика.";return null}
+    return spec;
+  };
   const o=el("input");o.type="datetime-local";
   const lo=el("label","Відкрити:");lo.append(o);
   const cl=el("input");cl.type="datetime-local";
@@ -571,21 +670,51 @@ function drawTaskManager(box,cur){
   const msg=el("p","","mut");
   const local=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
   o.value=local(new Date());
-  c.append(ta,jh,lo,lc,btn("Додати завдання",async()=>{
+  const manualOpens=el("input");manualOpens.type="datetime-local";manualOpens.value=local(new Date());
+  const manualOpensLabel=el("label","Відкрити:");manualOpensLabel.append(manualOpens);
+  const manualCloses=el("input");manualCloses.type="datetime-local";
+  const manualClosesLabel=el("label","Закрити (необов’язково, порожньо = відкрите завжди):");manualClosesLabel.append(manualCloses);
+  const addManual=btn("Додати задачу вручну",async()=>{
+    const spec=buildManualTask();
+    if(!spec)return;
+    await publishTask(spec,"Задачу додано.",{opens:manualOpens,closes:manualCloses,target:manualMsg,dialog:manual});
+  });
+  manual.append(titleLabel,topicLabel,textLabel,startLabel,expectLabel,
+    btn("Додати перевірку з input()",addCase,"ghost"),caseList,
+    el("h3","Варіативність"),el("p","В умові використовуй, наприклад, {{n}}. Значення параметра буде вибрано для кожного учня окремо.","mut"),
+    btn("Додати параметр",addParam,"ghost"),params,explanationLabel,exampleLabel,
+    el("h3","Вимоги до коду"),constructFields,manualOpensLabel,manualClosesLabel,addManual,manualMsg);
+  manual.addEventListener("click",event=>{if(event.target===manual)manual.close()});
+  manual.addEventListener("close",()=>manual.remove());
+  const openManual=btn("Додати задачу вручну",()=>{document.body.append(manual);manual.showModal();title.focus()});
+  const ta=el("textarea",undefined,"json");ta.placeholder="Встав JSON задачі";
+  const jh=el("p","","mut");jsonHint(ta,jh,v=>v&&typeof v.title==="string"?"«"+v.title+"»":"");
+  async function publishTask(spec,successMessage,options={}){
+    const target=options.target||msg;
+    if(typeof spec.title!=="string"||!spec.title.trim()||spec.title.length>80){target.textContent="Потрібне поле title (до 80 символів).";return}
+    if(typeof spec.text!=="string"||!spec.text.trim()){target.textContent="Потрібне поле text (умова).";return}
+    if(spec.expect===undefined&&!Array.isArray(spec.cases)&&!spec.turtle&&!spec.tk){target.textContent="Потрібне поле expect або cases.";return}
+    if(JSON.stringify(spec).length>50000){target.textContent="Завдання завелике.";return}
+    const opens=options.opens||o,closes=options.closes||cl;
+    const row={teacher_id:me.id,class_id:cur.id,title:spec.title.trim(),topic:typeof spec.topic==="string"?spec.topic.slice(0,40):null,spec:spec,
+      opens_at:new Date(opens.value||Date.now()).toISOString(),closes_at:closes.value?new Date(closes.value).toISOString():null};
+    const r=await sb.from("teacher_tasks").insert(row);
+    if(r.error){target.textContent="Не вдалося додати: "+r.error.message;return}
+    if(options.dialog)options.dialog.close();
+    T.note=successMessage;loadTeacher();
+  }
+  const importCard=el("details",undefined,"card");
+  importCard.append(el("summary","Імпортувати задачу з JSON"));
+  importCard.append(ta,jh);
+  const addImported=btn("Додати задачу з JSON",async()=>{
     const pr=parseLenient(ta.value);
     if(pr.error){msg.textContent=pr.error;return}
     const spec=pr.value;
     if(!spec||typeof spec!=="object"||Array.isArray(spec)){msg.textContent="Потрібен один JSON-об’єкт.";return}
-    if(typeof spec.title!=="string"||!spec.title.trim()||spec.title.length>80){msg.textContent="Потрібне поле title (до 80 символів).";return}
-    if(typeof spec.text!=="string"||!spec.text.trim()){msg.textContent="Потрібне поле text (умова).";return}
-    if(spec.expect===undefined&&!Array.isArray(spec.cases)&&!spec.turtle&&!spec.tk){msg.textContent="Потрібне поле expect або cases.";return}
-    if(JSON.stringify(spec).length>50000){msg.textContent="Завдання завелике.";return}
-    const row={teacher_id:me.id,class_id:cur.id,title:spec.title.trim(),topic:typeof spec.topic==="string"?spec.topic.slice(0,40):null,spec:spec,
-      opens_at:new Date(o.value||Date.now()).toISOString(),closes_at:cl.value?new Date(cl.value).toISOString():null};
-    const r=await sb.from("teacher_tasks").insert(row);
-    if(r.error){msg.textContent="Не вдалося додати: "+r.error.message;return}
-    T.note="Завдання додано.";loadTeacher();
-  }),msg);
+    await publishTask(spec,"Задачу додано.");
+  });
+  importCard.append(addImported);
+  c.append(openManual,importCard,lo,lc,msg);
   const mine=TD.tasks.filter(x=>x.class_id===cur.id);
   if(mine.length){
     c.append(el("h2","Додані завдання"));
