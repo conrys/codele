@@ -9,7 +9,11 @@ function download(name,text,type){
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 const csvCell=v=>'"'+String(v===null||v===undefined?"":v).replace(/"/g,'""')+'"';
-function showTeacher(){$("appBody").hidden=true;$("tPanel").hidden=false;loadTeacher()}
+function showTeacher(trackHistory=true){
+  $("appBody").hidden=true;$("tPanel").hidden=false;
+  if(trackHistory)pushAppHistory();
+  loadTeacher();
+}
 function hideTeacher(){$("tPanel").hidden=true;$("appBody").hidden=false}
 
 // Опис завдання за посиланням (ref) виду b:id, p:id, m:id, t:uuid (завдання від вчителя) або x:uuid (тест)
@@ -89,7 +93,7 @@ function teacherBack(){
   if(T.sub){const f=T.sub.back;T.sub=null;f();return}
   if(T.studentId){T.studentId=null;drawTeacher();return}
   if(T.testId){T.testId=null;drawTeacher();return}
-  hideTeacher();
+  navigateBack();
 }
 function drawTeacher(){
   renderTeacherNav();setBackLabel();

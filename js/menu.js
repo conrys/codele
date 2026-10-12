@@ -10,14 +10,14 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")toggleMenu(false)});
 function openRules(){
   toggleMenu(false);
   if(!rulesDlg.open)rulesDlg.showModal();
-  try{history.replaceState(null,"","#rules")}catch(e){}
+  try{history.replaceState(history.state,"","#rules")}catch(e){}
 }
 $("miRules").addEventListener("click",openRules);
-rulesDlg.addEventListener("close",()=>{try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}});
+rulesDlg.addEventListener("close",()=>{try{history.replaceState(history.state,"",location.pathname+location.search)}catch(e){}});
 $("rulesClose").addEventListener("click",()=>rulesDlg.close());
 // Клік по затемненню поза вікном також закриває правила
 rulesDlg.addEventListener("click",e=>{if(e.target===rulesDlg)rulesDlg.close()});
 if(location.hash==="#rules")openRules();
+window.addEventListener("popstate",()=>{if(rulesDlg.open&&location.hash!=="#rules")rulesDlg.close()});
 
 // Малюємо початковий стан і запускаємо завантаження Python.
-

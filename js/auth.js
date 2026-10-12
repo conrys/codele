@@ -37,7 +37,10 @@ async function showApp(){
   // Скільки часу учням показувати значок «вставлено», вирішує вчитель
   const res=await Promise.all([sb.rpc("paste_mark_visible"),loadProgress()]);
   pasteMarkVisible=me.role==="teacher"||res[0].data!==false;
+  stopTestTimer();testRun=null;testResultData=null;
+  testRouteCache.clear();testResultCache.clear();
   task=null;tab="topics";view="list";
+  startAppHistory();
   render();
   if(me.role==="teacher")showTeacher();      // вчитель одразу потрапляє в панель
 }
@@ -100,6 +103,7 @@ $("aGo").addEventListener("click",async()=>{
   }
 });
 async function logout(){
+  stopTestTimer();testRun=null;testResultData=null;
   await sb.auth.signOut();
   me=null;task=null;prog={};pastes=[];
   authMode="login";

@@ -1,7 +1,8 @@
 // ===================== Тести =====================
 // Тест — це JSON, який учитель імпортує прямо в базу. Учень отримує питання БЕЗ правильних відповідей,
 // а всі відповіді перевіряє сервер. Тому підглянути відповіді в коді сторінки неможливо.
-let testRun=null;                       // поточна спроба: {attemptId, qs, answers, title, timer}
+let testRun=null,testResultData=null;   // поточна спроба та останній результат
+const testRouteCache=new Map(),testResultCache=new Map();
 const testKey=id=>"codele-test:"+me.id+":"+id;
 const pct=(s,m)=>Number(m)?Math.round(Number(s)/Number(m)*100):0;
 const fmtNum=x=>Number(x).toFixed(Number.isInteger(Number(x))?0:1);
@@ -40,13 +41,15 @@ async function beginTest(t){
 }
 
 // ---------- Учень: проходження ----------
-function openTestView(d){
+function openTestView(d,trackHistory=true){
   stopTestTimer();
   view="test";tab="tests";
+  testResultData=null;
+  testRouteCache.set(d.attempt_id,d);
   $("listView").hidden=true;$("taskView").hidden=true;$("testView").hidden=false;
   TABS.forEach(k=>{$("tab_"+k).className=k===tab?"":"ghost"});
   const box=$("testBox");box.textContent="";
-  testRun={attemptId:d.attempt_id,qs:d.questions||[],answers:{},title:d.title,timer:null};
+  testRun={attemptId:d.attempt_id,qs:d.questions||[],answers:{},title:d.title,timer:null,navData:d};
   try{testRun.answers=JSON.parse(localStorage.getItem(testKey(d.attempt_id)))||{}}catch(e){}
   box.append(btn("← До списку",leaveTest,"ghost"));
   box.append(el("h2",d.title));
@@ -56,6 +59,7 @@ function openTestView(d){
   box.append(btn("Здати тест",()=>submitTest(false)));
   if(d.time_limit_min)startTestTimer(d,timerEl);
   window.scrollTo(0,0);
+  if(trackHistory)pushAppHistory();
 }
 function questionBlock(q,i){
   const wrap=el("div",undefined,"q");
@@ -102,8 +106,7 @@ function startTestTimer(d,timerEl){
   if(testRun)testRun.timer=setInterval(tick,1000);
 }
 function leaveTest(){
-  if(!confirm("Вийти з тесту? Відповіді збережуться, і ти зможеш продовжити, поки не вийшов час."))return;
-  stopTestTimer();testRun=null;view="list";render();
+  navigateBack();
 }
 async function submitTest(auto){
   if(!testRun)return;
@@ -120,14 +123,28 @@ async function submitTest(auto){
   testRun=null;
   showTestResult(run,r.data);
 }
-function showTestResult(run,res){
+function showTestResult(run,res,trackHistory=true){
+  view="test";tab="tests";
+  testResultData={run:run,res:res};
+  testResultCache.set(run.attemptId,testResultData);
   const box=$("testBox");box.textContent="";
-  box.append(btn("← До списку тестів",()=>{view="list";render()}));
+  box.append(btn("← До списку тестів",navigateBack));
   box.append(el("h2","Результат: "+fmtNum(res.score)+" з "+fmtNum(res.max)+" ("+pct(res.score,res.max)+"%)"));
   if(res.late)box.append(el("p","Час вийшов, тому відповіді не зараховано.","err"));
   if(res.detail)renderReview(box,run.qs,run.answers,res.detail);
   else box.append(el("p","Правильні відповіді вчитель вирішив не показувати. Оцінку ти отримаєш від вчителя.","mut"));
   window.scrollTo(0,0);
+  if(trackHistory)replaceAppHistory();
+}
+function restoreTestRoute(id){
+  const data=testRouteCache.get(id);
+  if(data)openTestView(data,false);
+  else{testRun=null;tab="tests";view="list";render()}
+}
+function restoreTestResult(id){
+  const result=testResultCache.get(id);
+  if(result)showTestResult(result.run,result.res,false);
+  else{testResultData=null;tab="tests";view="list";render()}
 }
 
 // ---------- Розбір відповідей (учень і вчитель) ----------

@@ -71,10 +71,84 @@ let errLine=null;                         // який рядок підсвіч�
 let marathon=null, lastMarathon=null;     // стан марафону та підсумок останнього
 let practiceFilter="all";
 let running=false;
+let appHistoryStarted=false, restoringAppHistory=false;
 const MARA_PER_TOPIC=3;
 const TABS=["topics","practice","marathon","teacher","tests","helper","sandbox"];   // вкладки
 
 const topicName=id=>id==="teacher"?"Від вчителя":(TOPICS.find(t=>t.id===id)||{name:id}).name;
+
+function appNavigationState(){
+  const state={codeleApp:true,tab:tab,view:view,practiceFilter:practiceFilter,teacherPanel:!$("tPanel").hidden};
+  if(view==="task"&&base)state.task={id:base.id,ref:ref,seed:seed};
+  if(view==="test"&&testRun)state.testAttemptId=testRun.attemptId;
+  if(testResultData)state.testResultAttemptId=testResultData.run.attemptId;
+  return state;
+}
+function startAppHistory(){
+  if(!appHistoryStarted){
+    window.addEventListener("popstate",restoreAppHistory);
+    appHistoryStarted=true;
+  }
+  const state=appNavigationState();
+  history.replaceState(state,"");
+  history.pushState(state,"");
+  restoringAppHistory=false;
+}
+function pushAppHistory(){
+  if(appHistoryStarted&&!restoringAppHistory)history.pushState(appNavigationState(),"");
+}
+function replaceAppHistory(){
+  if(appHistoryStarted&&!restoringAppHistory)history.replaceState(appNavigationState(),"");
+}
+function navigateBack(){
+  if(history.state&&history.state.codeleApp)history.back();
+  else backToList();
+}
+function restoreAppHistory(event){
+  let state=event.state;
+  if(!state||!state.codeleApp)return;
+  if(marathon&&(state.tab!=="marathon"||state.view!=="task"||!state.task||state.task.ref!==ref)){
+    if(!confirm("Зупинити марафон? Прогрес поточного забігу буде втрачено.")){
+      history.pushState(appNavigationState(),"");
+      return;
+    }
+    stopMarathon();
+    if(state.tab==="marathon"&&state.view==="task"){
+      state=Object.assign({},state,{view:"list",task:undefined});
+      history.replaceState(state,"");
+    }
+  }
+  if(testRun&&!(state.view==="test"&&state.testAttemptId===testRun.attemptId)){
+    if(!confirm("Вийти з тесту? Відповіді збережуться, і ти зможеш продовжити, поки не вийшов час.")){
+      history.pushState(appNavigationState(),"");
+      return;
+    }
+    stopTestTimer();testRun=null;
+  }
+  restoringAppHistory=true;
+  testResultData=null;
+  practiceFilter=state.practiceFilter||"all";
+  if(state.teacherPanel){
+    $("appBody").hidden=true;$("tPanel").hidden=false;
+    loadTeacher();
+    restoringAppHistory=false;
+    return;
+  }
+  $("tPanel").hidden=true;$("appBody").hidden=false;
+  if(state.testResultAttemptId){
+    restoreTestResult(state.testResultAttemptId);
+  }else if(state.view==="test"&&state.testAttemptId){
+    restoreTestRoute(state.testAttemptId);
+  }else if(state.view==="task"&&state.task){
+    const b=TASKS.find(x=>x.id===state.task.id)||teacherTasks.find(x=>x.id===state.task.id);
+    if(b)openTask(b,state.tab,{ref:state.task.ref,seed:state.task.seed,history:false});
+    else{tab=state.tab;view="list";render()}
+  }else{
+    testResultData=null;
+    tab=state.tab||"topics";view="list";render();
+  }
+  restoringAppHistory=false;
+}
 
 // Скільки разів учень натискав «Інший варіант» у практиці (щоб варіант не повторювався)
 function pv(){try{return JSON.parse(localStorage.getItem("codele-pv:"+me.id))||{}}catch(e){return {}}}
@@ -119,8 +193,14 @@ function setTab(t){
   if(marathon&&t!=="marathon"){
     if(!confirm("Зупинити марафон? Прогрес поточного забігу буде втрачено."))return;
     stopMarathon();
+    tab="marathon";view="list";
+    replaceAppHistory();
   }
-  tab=t;view="list";render();
+  if(testRun&&view==="test"){
+    if(!confirm("Вийти з тесту? Відповіді збережуться, і ти зможеш продовжити, поки не вийшов час."))return;
+    stopTestTimer();testRun=null;
+  }
+  tab=t;view="list";testResultData=null;render();pushAppHistory();
 }
 function render(){
   TABS.forEach(k=>{$("tab_"+k).className=k===tab?"":"ghost"});
@@ -248,6 +328,7 @@ function openTask(b,from,opts){
   showPaste();
   if(py)updateLive();
   window.scrollTo(0,0);
+  if(opts.history!==false){testResultData=null;pushAppHistory()}
 }
 function clearOutputs(){
   cancelDrawingAnimation();
@@ -483,7 +564,7 @@ async function finishMarathon(){
   stopMarathon();
   lastMarathon={ms:ms,solved:m.solved,skipped:m.skipped,total:m.plan.length};
   sb.from("marathon_results").insert({user_id:me.id,ms:ms,tokens:m.tokens,tasks:m.solved,pasted:m.pasted}).then(warnSave);
-  tab="marathon";view="list";render();
+  tab="marathon";view="list";replaceAppHistory();render();
 }
 $("skipBtn").addEventListener("click",()=>{if(marathon){marathon.skipped++;nextStage()}});
 async function listMarathon(box){
@@ -531,7 +612,7 @@ function playFinale(host){
 
 // ---------- Кнопки ----------
 $("run").addEventListener("click",runCode);
-$("backBtn").addEventListener("click",backToList);
+$("backBtn").addEventListener("click",navigateBack);
 $("variantBtn").addEventListener("click",()=>{pvInc(base.id);openTask(base,"practice")});
 TABS.forEach(k=>$("tab_"+k).addEventListener("click",()=>setTab(k)));
 
