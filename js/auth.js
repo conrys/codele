@@ -277,31 +277,26 @@ async function openMyProfile(){
     if(!r.error)me.name=v;
   },"ghost"),msg);
   dlg.append(det);
-  // Зміна пароля: спершу перевіряємо поточний, потім ставимо новий
+  // Зміна пароля: досить того, що людина вже увійшла (старий пароль часто забувають)
   const pdet=el("details");
   pdet.append(el("summary","Змінити пароль"));
-  const passField=(label,ac)=>{
-    const i=el("input");i.type="password";i.autocomplete=ac;
+  const passField=(label)=>{
+    const i=el("input");i.type="password";i.autocomplete="new-password";
     const l=el("label",label);l.append(i);pdet.append(l);return i;
   };
-  const curIn=passField("Поточний пароль","current-password");
-  const newIn=passField("Новий пароль (від 6 символів)","new-password");
-  const repIn=passField("Повтори новий пароль","new-password");
+  const newIn=passField("Новий пароль (від 6 символів)");
+  const repIn=passField("Повтори новий пароль");
   const pmsg=el("p","","mut");
   const pbtn=btn("Змінити пароль",async()=>{
-    const cur=curIn.value,nw=newIn.value;
-    if(!cur){pmsg.textContent="Введи поточний пароль.";return}
-    if(nw.length<6){pmsg.textContent="Новий пароль має містити щонайменше 6 символів.";return}
-    if(nw!==repIn.value){pmsg.textContent="Нові паролі не збігаються.";return}
-    if(nw===cur){pmsg.textContent="Новий пароль збігається з поточним.";return}
+    const nw=newIn.value;
+    if(nw.length<6){pmsg.textContent="Пароль має містити щонайменше 6 символів.";return}
+    if(nw!==repIn.value){pmsg.textContent="Паролі не збігаються.";return}
     pbtn.disabled=true;pmsg.textContent="Зберігаю…";
     try{
-      const chk=await sb.auth.signInWithPassword({email:emailOf(me.nick),password:cur});
-      if(chk.error){pmsg.textContent="Поточний пароль невірний.";return}
       const r=await sb.auth.updateUser({password:nw});
       if(r.error){pmsg.textContent="Не вдалося змінити пароль: "+r.error.message;return}
-      curIn.value=newIn.value=repIn.value="";
-      pmsg.textContent="Пароль змінено. Наступного разу входь з новим.";
+      newIn.value=repIn.value="";
+      pmsg.textContent="Пароль змінено. Тепер входь з ним на будь-якому пристрої.";
     }finally{pbtn.disabled=false}
   },"ghost");
   pdet.append(pbtn,pmsg);
